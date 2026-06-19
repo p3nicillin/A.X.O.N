@@ -44,7 +44,10 @@ def build_bridge():
         audio_input=audio, tts=SimpleNamespace(
             available=True, backend_name="SAPI5", selected_voice="Test Voice"),
         state=AxonState.IDLE, audit_session_id="live-session",
-        autonomy=None,
+        autonomy=None, crash_reporter=SimpleNamespace(summary=lambda: {
+            "enabled": True, "count": 2,
+            "last": {"timestamp": "2026-06-19T20:00:00"},
+        }),
     )
     return web_window.Bridge(config, EventBus(), orch)
 
@@ -64,6 +67,7 @@ def test_panel_snapshot_uses_live_project_objects():
     assert data["voice"]["tts_backend"] == "SAPI5"
     assert data["voice"]["voice"] == "Test Voice"
     assert data["voice"]["stt_model"] == "live-model"
+    assert data["diagnostics"]["crash_reports"] == 2
 
 
 def test_telemetry_snapshot_has_no_synthetic_values(monkeypatch):
@@ -82,3 +86,28 @@ def test_telemetry_snapshot_has_no_synthetic_values(monkeypatch):
     assert data["requests"] == 3
     assert data["latency"] == 42.5
     assert data["uptime_seconds"] >= 0
+
+
+def test_audit_history_pages_newest_first_and_skips_bad_lines(tmp_path,
+                                                               monkeypatch):
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    (logs / "audit-20260618.jsonl").write_text(
+        '{"ts":"2026-06-18T10:00:00","session":"old","type":"session_start"}\n',
+        encoding="utf-8")
+    (logs / "audit-20260619.jsonl").write_text(
+        '{"ts":"2026-06-19T10:00:00","session":"new","type":"state_changed","payload":"idle"}\n'
+        'truncated garbage\n'
+        '{"ts":"2026-06-19T11:00:00","session":"new","type":"transcript","payload":{"text":"private words"}}\n',
+        encoding="utf-8")
+    monkeypatch.setattr(web_window, "DATA_DIR", tmp_path)
+    bridge = build_bridge()
+
+    first = bridge.audit_history(0, 2)
+    second = bridge.audit_history(first["next_offset"], 2)
+
+    assert first["total"] == 3
+    assert [r["type"] for r in first["records"]] == ["transcript", "state_changed"]
+    assert "private words" not in first["records"][0]["summary"]
+    assert second["records"][0]["session"] == "old"
+    assert second["next_offset"] is None

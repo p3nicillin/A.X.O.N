@@ -167,6 +167,50 @@ class Orchestrator:
         threading.Thread(target=self._process, args=(command, True),
                          daemon=True).start()
 
+    def update_user_settings(self, changes: dict) -> dict:
+        allowed = {"tts_voice", "tts_rate", "address_term",
+                   "wake_ack_phrase", "require_wake_word"}
+        if set(changes) - allowed:
+            return {"ok": False, "error": "unsupported live setting"}
+        try:
+            settings = self.config.update_user_settings(changes)
+            self.wake.required = self.config.require_wake_word
+            if hasattr(self.tts, "reconfigure"):
+                self.tts.reconfigure(voice=self.config.tts_voice,
+                                     rate=self.config.tts_rate)
+            self._log("info", "user voice/persona settings updated", source="config")
+            return {"ok": True, "settings": settings}
+        except (TypeError, ValueError, OSError) as exc:
+            return {"ok": False, "error": str(exc)}
+
+    def switch_ai_engine(self, engine: str) -> dict:
+        requested = str(engine or "").strip().lower()
+        if requested not in {"local", "rules", "cloud"}:
+            return {"ok": False, "error": "unsupported AI engine"}
+        if requested == "cloud" and not self.config.ai.cloud.enabled:
+            return {"ok": False, "error": "cloud AI is disabled by policy"}
+        if not self._busy.acquire(blocking=False):
+            return {"ok": False, "error": "AXON is processing a command"}
+        previous = self.config.ai.engine
+        try:
+            self.config.ai.engine = requested
+            candidate = build_engine(self.config, self.registry.catalogue(), self.bus)
+            health = candidate.health()
+            if requested != "rules" and health.get("active") != requested:
+                self.config.ai.engine = previous
+                detail = health.get("backends", {}).get(requested, {}).get(
+                    "detail", f"{requested} backend unavailable")
+                return {"ok": False, "error": detail, "health": health}
+            self.config.update_user_settings({"ai_engine": requested})
+            self.ai = candidate
+            self._log("info", f"AI engine switched to {requested}", source="ai")
+            return {"ok": True, "engine": requested, "health": health}
+        except (TypeError, ValueError, OSError) as exc:
+            self.config.ai.engine = previous
+            return {"ok": False, "error": str(exc)}
+        finally:
+            self._busy.release()
+
     # -- §11 immutable command log ------------------------------------------
     def _command_log(self, wake: bool, command_type: str, intent_type: str,
                      skill_used: str, success: bool) -> None:

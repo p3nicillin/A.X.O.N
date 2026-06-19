@@ -7,10 +7,12 @@ Settings resolve in this order (later wins):
 """
 from __future__ import annotations
 
+import json
 import os
 import tomllib
 from dataclasses import dataclass, field, fields
 from pathlib import Path
+from typing import Any, ClassVar
 
 # --- Well-known directories -------------------------------------------------
 ROOT = Path(__file__).resolve().parent.parent
@@ -18,6 +20,7 @@ DATA_DIR = ROOT / "data"          # logs, notes, runtime state
 MEMORY_DIR = DATA_DIR / "memory"  # §4 episodic vault + semantic index
 MODELS_DIR = ROOT / "models"      # downloaded STT models live here
 SKILLS_DIR = Path(__file__).resolve().parent / "skills"
+USER_SETTINGS_PATH = DATA_DIR / "user_settings.json"
 
 for _d in (DATA_DIR, MODELS_DIR):
     _d.mkdir(parents=True, exist_ok=True)
@@ -68,6 +71,10 @@ class AIConfig:
 
 @dataclass
 class Config:
+    USER_SETTING_NAMES: ClassVar[frozenset[str]] = frozenset({
+        "tts_voice", "tts_rate", "address_term", "wake_ack_phrase",
+        "require_wake_word", "ai_engine",
+    })
     # --- AI intent engine ---
     anthropic_api_key: str = ""   # legacy; prefer ANTHROPIC_API_KEY / secrets store
     ai_model: str = "claude-haiku-4-5-20251001"   # legacy cloud model alias
@@ -86,7 +93,7 @@ class Config:
 
     # --- Wake word ---
     wake_word: str = "Axon"
-    require_wake_word: bool = False  # if True, ignore speech until wake word heard
+    require_wake_word: bool = True   # ignore speech until the Axon wake word is heard
     acknowledge_wake: bool = True    # speak a short ack when woken with no command
     wake_ack_phrase: str = "Yes, sir?"
     address_term: str = "sir"        # how AXON addresses the user
@@ -104,12 +111,14 @@ class Config:
 
     # --- Text to speech ---
     tts_rate: int = 178             # words per minute
-    tts_voice: str = ""             # SAPI voice name substring; "" = system default
+    tts_voice: str = "Hazel"        # British SAPI voice name substring
 
     # --- Enterprise: audit & logging ---
     audit_enabled: bool = True       # append-only JSONL audit trail of every action
     log_level: str = "INFO"          # DEBUG | INFO | WARN | ERROR
     audit_retention_days: int = 90   # auto-prune audit/log files older than this
+    crash_reporting_enabled: bool = True  # local, scrubbed reports only
+    crash_retention_days: int = 30
 
     # --- Visual ---
     window_width: int = 1100
@@ -152,6 +161,7 @@ class Config:
     @classmethod
     def load(cls) -> "Config":
         cfg = cls()
+        cfg._env_locked: set[str] = set()
 
         # 2. config.toml
         toml_path = ROOT / "config.toml"
@@ -165,7 +175,16 @@ class Config:
                 elif key in valid:
                     setattr(cfg, key, value)
 
-        # 3. environment overrides
+        # 3. persisted, non-secret user preferences
+        if USER_SETTINGS_PATH.exists():
+            try:
+                raw = json.loads(USER_SETTINGS_PATH.read_text(encoding="utf-8"))
+                if isinstance(raw, dict):
+                    cfg._apply_user_settings(raw)
+            except Exception as exc:
+                print(f"[config] user settings ignored: {exc}")
+
+        # 4. environment overrides
         cfg.anthropic_api_key = os.getenv("ANTHROPIC_API_KEY", cfg.anthropic_api_key)
         for f in fields(cls):
             if f.name == "ai":                       # handled by _apply_ai_env
@@ -173,6 +192,7 @@ class Config:
             env = _env(f.name.upper())
             if env is None:
                 continue
+            cfg._env_locked.add(f.name)
             cur = getattr(cfg, f.name)
             if isinstance(cur, bool):
                 setattr(cfg, f.name, env.strip().lower() in ("1", "true", "yes", "on"))
@@ -186,6 +206,83 @@ class Config:
                 setattr(cfg, f.name, env)
         cfg._apply_ai_env()
         return cfg
+
+    @staticmethod
+    def _validated_user_settings(changes: dict[str, Any]) -> dict[str, Any]:
+        unknown = set(changes) - Config.USER_SETTING_NAMES
+        if unknown:
+            raise ValueError(f"unsupported setting(s): {', '.join(sorted(unknown))}")
+        out: dict[str, Any] = {}
+        for name, value in changes.items():
+            if name == "tts_rate":
+                if isinstance(value, bool):
+                    raise ValueError("tts_rate must be an integer")
+                value = int(value)
+                if not 80 <= value <= 350:
+                    raise ValueError("tts_rate must be between 80 and 350")
+            elif name == "require_wake_word":
+                if not isinstance(value, bool):
+                    raise ValueError("require_wake_word must be boolean")
+            elif name == "ai_engine":
+                value = str(value).strip().lower()
+                if value not in {"local", "rules", "cloud"}:
+                    raise ValueError("ai_engine must be local, rules, or cloud")
+            else:
+                value = str(value).strip()
+                limit = 160 if name == "wake_ack_phrase" else 120
+                if not value or len(value) > limit:
+                    raise ValueError(f"{name} must contain 1-{limit} characters")
+            out[name] = value
+        return out
+
+    def _apply_user_settings(self, changes: dict[str, Any]) -> None:
+        valid = self._validated_user_settings(
+            {k: v for k, v in changes.items() if k in self.USER_SETTING_NAMES})
+        for name, value in valid.items():
+            if name == "ai_engine":
+                self.ai.engine = value
+            else:
+                setattr(self, name, value)
+
+    def update_user_settings(self, changes: dict[str, Any]) -> dict[str, Any]:
+        valid = self._validated_user_settings(changes)
+        locked = set(getattr(self, "_env_locked", set()))
+
+        def current_value(name: str):
+            return self.ai.engine if name == "ai_engine" else getattr(self, name)
+        blocked = sorted(name for name, value in valid.items()
+                         if name in locked and value != current_value(name))
+        if blocked:
+            raise ValueError(f"environment-locked setting(s): {', '.join(blocked)}")
+
+        current: dict[str, Any] = {}
+        if USER_SETTINGS_PATH.exists():
+            try:
+                raw = json.loads(USER_SETTINGS_PATH.read_text(encoding="utf-8"))
+                if isinstance(raw, dict):
+                    current = {k: v for k, v in raw.items()
+                               if k in self.USER_SETTING_NAMES}
+            except Exception:
+                current = {}
+        current.update(valid)
+        USER_SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = USER_SETTINGS_PATH.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(current, indent=2, sort_keys=True), encoding="utf-8")
+        tmp.replace(USER_SETTINGS_PATH)
+        self._apply_user_settings(valid)
+        return self.user_settings_snapshot()
+
+    def user_settings_snapshot(self) -> dict[str, Any]:
+        return {
+            "tts_voice": self.tts_voice,
+            "tts_rate": self.tts_rate,
+            "address_term": self.address_term,
+            "wake_ack_phrase": self.wake_ack_phrase,
+            "require_wake_word": self.require_wake_word,
+            "ai_engine": self.ai.engine,
+            "locked": sorted(getattr(self, "_env_locked", set())
+                             & self.USER_SETTING_NAMES),
+        }
 
     # -- nested [ai] config helpers -----------------------------------------
     def _apply_ai_table(self, table: dict) -> None:
@@ -208,6 +305,7 @@ class Config:
 
         if _env("AI_ENGINE"):
             self.ai.engine = _env("AI_ENGINE")
+            self._env_locked.add("ai_engine")
         if _env("AI_FALLBACK"):
             self.ai.fallback = [s.strip() for s in _env("AI_FALLBACK").split(",")
                                 if s.strip()]

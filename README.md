@@ -181,6 +181,15 @@ $env:AXON_AI_ENGINE = "cloud"                # or "auto" (cloud → local → ru
 ```
 The key is read only from the environment or your OS credential store.
 
+### Governed runtime controls
+
+The native AXON UI can switch between healthy local and deterministic rules
+backends without restarting. Voice, rate, address style, wake acknowledgement,
+and wake enforcement are validated and saved to `data/user_settings.json`.
+Environment overrides remain locked and take precedence. The Audit panel pages
+real hash-chained history, while Diagnostics reports local redacted crash
+artifacts from `data/crashes/`.
+
 ---
 
 ## 4. Using it

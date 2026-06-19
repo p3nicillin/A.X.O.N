@@ -1,5 +1,8 @@
 # AXON — Enterprise Master Prompt
 
+> The implemented next-phase execution specification is
+> [`docs/MASTER_PROMPT_PHASE4.md`](docs/MASTER_PROMPT_PHASE4.md).
+
 > Feed this document to a principal-level engineering agent to evolve the
 > AXON v1 prototype into a hardened, enterprise-grade, voice-driven AI
 > operating layer for Windows. It assumes the existing modular architecture

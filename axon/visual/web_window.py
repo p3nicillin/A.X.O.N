@@ -115,6 +115,65 @@ class Bridge:
             self.set_panel_data(self.panel_snapshot())
         return {"ok": ok, "disabled_skills": list(self.config.disabled_skills)}
 
+    def update_settings(self, changes: dict) -> dict:
+        result = self.orch.update_user_settings(changes or {})
+        self.set_panel_data(self.panel_snapshot())
+        return result
+
+    def switch_ai_engine(self, engine: str) -> dict:
+        result = self.orch.switch_ai_engine(engine)
+        self.set_panel_data(self.panel_snapshot())
+        return result
+
+    @staticmethod
+    def _audit_summary(record: dict) -> str:
+        kind = str(record.get("type", "event"))
+        payload = record.get("payload")
+        if kind == "command_log" and isinstance(payload, dict):
+            return (f"{payload.get('intent', 'unknown')} -> "
+                    f"{payload.get('skill_used', 'none')} "
+                    f"({'ok' if payload.get('success') else 'blocked'})")
+        if kind == "skill_result" and isinstance(payload, dict):
+            return f"{payload.get('skill', 'skill')}: {payload.get('summary', '')}"[:240]
+        if kind == "intent" and isinstance(payload, dict):
+            intent = payload.get("intent") or {}
+            return f"intent {intent.get('type', 'unknown')} via {payload.get('backend', '?')}"
+        if kind == "state_changed":
+            return f"state {payload}"
+        if kind == "transcript" and isinstance(payload, dict):
+            return f"voice transcript ({len(str(payload.get('text', '')))} characters)"
+        if kind == "speak_start" and isinstance(payload, dict):
+            return f"spoken response ({len(str(payload.get('text', '')))} characters)"
+        if kind == "session_start":
+            return "session started"
+        return kind.replace("_", " ")
+
+    def audit_history(self, offset: int = 0, limit: int = 50) -> dict:
+        offset = max(0, int(offset or 0))
+        limit = max(1, min(100, int(limit or 50)))
+        records: list[dict] = []
+        for path in sorted((DATA_DIR / "logs").glob("audit-*.jsonl"),
+                           reverse=True):
+            try:
+                lines = path.read_text(encoding="utf-8").splitlines()
+            except OSError:
+                continue
+            for line in reversed(lines):
+                try:
+                    raw = json.loads(line)
+                except Exception:
+                    continue
+                records.append({
+                    "ts": raw.get("ts", ""), "session": raw.get("session", ""),
+                    "type": raw.get("type", "event"),
+                    "summary": self._audit_summary(raw),
+                })
+        page = records[offset:offset + limit]
+        next_offset = offset + len(page)
+        return {"records": page,
+                "next_offset": next_offset if next_offset < len(records) else None,
+                "total": len(records)}
+
     # ====================  Python -> JS  ====================
     def js(self, code: str) -> None:
         # hold every Python->JS call until the page has booted (on_ready),
@@ -300,6 +359,9 @@ class Bridge:
                 memories = []
         active = ai_health.get("active", "rules")
         active_info = ai_health.get("backends", {}).get(active, {})
+        crash_reporter = getattr(self.orch, "crash_reporter", None)
+        crash = crash_reporter.summary() if crash_reporter is not None else {
+            "enabled": False, "count": 0, "last": None}
         state = getattr(self.orch, "state", AxonState.IDLE)
         skills = []
         for skill in self.orch.registry.skills:
@@ -322,6 +384,7 @@ class Bridge:
         return {
             "status": {
                 "backend": active,
+                "configured_engine": self.config.ai.engine,
                 "model": active_info.get("model", "rule-based"),
                 "chain": (ai_health.get("chain") or []) + ["rules"],
                 "wake_word": self.config.wake_word,
@@ -348,7 +411,9 @@ class Bridge:
                 "wake_ack": self.config.wake_ack_phrase,
                 "persona": "AXON",
                 "address_term": self.config.address_term,
+                "available_voices": list(getattr(self.orch.tts, "voice_names", [])),
             },
+            "settings": self.config.user_settings_snapshot(),
             "diagnostics": {
                 "data_dir": str(DATA_DIR),
                 "logs_dir": str(DATA_DIR / "logs"),
@@ -360,6 +425,9 @@ class Bridge:
                 "planning_enabled": self.config.planning_enabled,
                 "critic_enabled": self.config.critic_enabled,
                 "confirm_sensitive": self.config.confirm_sensitive,
+                "crash_reporting": crash.get("enabled", False),
+                "crash_reports": crash.get("count", 0),
+                "last_crash": ((crash.get("last") or {}).get("timestamp") or "none"),
             },
         }
 
@@ -396,6 +464,15 @@ class _Api:
 
     def set_skill_enabled(self, name: str, enabled: bool) -> dict:
         return self._bridge.set_skill_enabled(name, enabled)
+
+    def update_settings(self, changes: dict) -> dict:
+        return self._bridge.update_settings(changes)
+
+    def switch_ai_engine(self, engine: str) -> dict:
+        return self._bridge.switch_ai_engine(engine)
+
+    def get_audit_history(self, offset: int = 0, limit: int = 50) -> dict:
+        return self._bridge.audit_history(offset, limit)
 
 
 class AxonWebWindow:

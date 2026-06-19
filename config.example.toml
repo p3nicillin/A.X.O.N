@@ -37,11 +37,11 @@ vad_silence_ms = 800     # trailing silence that ends an utterance
 
 # --- Wake word --------------------------------------------------------------
 wake_word = "Axon"
-require_wake_word = false # true = ignore speech until "Axon" is heard
+require_wake_word = true  # ignore speech until "Axon" is heard
 
 # --- Text to speech ---------------------------------------------------------
-tts_rate = 185           # words per minute
-tts_voice = ""           # substring of a SAPI voice name, e.g. "Zira"
+tts_rate = 178           # words per minute
+tts_voice = "Hazel"      # British SAPI voice name substring
 
 # --- Visual -----------------------------------------------------------------
 window_width = 1100
@@ -50,3 +50,12 @@ target_fps = 60
 
 # --- Safety -----------------------------------------------------------------
 confirm_sensitive = true # require spoken confirmation for sensitive skills
+
+# --- Audit and local crash reports -----------------------------------------
+audit_enabled = true
+audit_retention_days = 90
+crash_reporting_enabled = true  # local redacted JSON only; never uploaded
+crash_retention_days = 30
+
+# UI changes to voice/persona/backend are stored separately in
+# data/user_settings.json. AXON_* environment variables remain authoritative.

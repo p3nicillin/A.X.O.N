@@ -48,6 +48,7 @@ class TtsEngine:
         self.backend_name = "SAPI5" if win32_client is not None else (
             "pyttsx3" if pyttsx3 is not None else "unavailable")
         self.selected_voice = config.tts_voice or "system default"
+        self.voice_names: list[str] = []
         self._q: "queue.Queue[str | None]" = queue.Queue()
         self._engine = None
         self._speaking = threading.Event()
@@ -77,6 +78,14 @@ class TtsEngine:
     @property
     def is_speaking(self) -> bool:
         return self._speaking.is_set()
+
+    def reconfigure(self, *, voice: str, rate: int) -> None:
+        """Update plain config only; the worker applies it on the next utterance.
+
+        The SAPI COM object stays owned by the worker apartment.
+        """
+        self.config.tts_voice = voice
+        self.config.tts_rate = rate
 
     # -- worker thread -------------------------------------------------------
     def _run(self) -> None:
@@ -115,8 +124,11 @@ class TtsEngine:
             try:
                 if self.available:
                     if self.backend_name == "SAPI5":
+                        self._configure_sapi()
                         self._speak_sapi(text)
                     else:
+                        self._engine.setProperty("rate", self.config.tts_rate)
+                        self._select_pyttsx3_voice()
                         self._engine.say(text)
                         self._engine.runAndWait()
                 else:
@@ -132,6 +144,8 @@ class TtsEngine:
         self._engine.Rate = max(-10, min(10, round((self.config.tts_rate - 200) / 20)))
         want = self.config.tts_voice.strip().lower()
         voices = self._engine.GetVoices()
+        self.voice_names = [voices.Item(i).GetDescription()
+                            for i in range(voices.Count)]
         selected = self._engine.Voice
         for i in range(voices.Count):
             voice = voices.Item(i)
@@ -155,6 +169,7 @@ class TtsEngine:
     def _select_pyttsx3_voice(self) -> None:
         want = self.config.tts_voice.strip().lower()
         voices = self._engine.getProperty("voices")
+        self.voice_names = [v.name for v in voices]
         selected = None
         for v in voices:
             if want in v.name.lower():

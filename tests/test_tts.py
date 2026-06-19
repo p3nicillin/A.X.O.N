@@ -44,3 +44,16 @@ def test_native_sapi_interrupt_purges_current_utterance():
 
     assert sapi.spoken[-1] == (
         "", _SVS_FLAGS_ASYNC | _SVS_PURGE_BEFORE_SPEAK)
+
+
+def test_reconfigure_does_not_touch_worker_engine():
+    cfg = Config()
+    tts = TtsEngine(cfg, EventBus())
+    engine = object()
+    tts._engine = engine
+
+    tts.reconfigure(voice="New Voice", rate=220)
+
+    assert tts._engine is engine
+    assert cfg.tts_voice == "New Voice"
+    assert cfg.tts_rate == 220

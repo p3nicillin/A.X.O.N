@@ -15,6 +15,7 @@ from .config import DATA_DIR, Config
 from .core.event_bus import Event, EventBus
 from .core.orchestrator import Orchestrator
 from .enterprise.audit import AuditLogger
+from .enterprise.crash import CrashReporter
 from .perception.audio_input import AudioInput
 from .perception.stt import SttEngine
 from .skills.registry import SkillRegistry
@@ -114,6 +115,8 @@ def main() -> None:
     # enterprise audit + structured logging attaches first so it captures every
     # subsequent event from startup onward.
     audit = AuditLogger(config, bus)
+    crash = CrashReporter(config, audit.session_id)
+    crash.install()
 
     registry = SkillRegistry(config.disabled_skills).discover()
     tts = TtsEngine(config, bus)
@@ -121,6 +124,7 @@ def main() -> None:
     audio = AudioInput(config, bus, stt)
     orchestrator = Orchestrator(config, bus, registry, tts, audio)
     orchestrator.audit_session_id = audit.session_id
+    orchestrator.crash_reporter = crash
 
     # §16 autonomy is opt-in (it observes the system). Construct it here so it
     # can share the orchestrator's user model + memory, but start it with the
@@ -167,6 +171,7 @@ def main() -> None:
             autonomy.stop()
         audio.stop()
         tts.stop()
+        crash.uninstall()
 
     def on_stt_ready(ok: bool, reason: str) -> None:
         if ok:
