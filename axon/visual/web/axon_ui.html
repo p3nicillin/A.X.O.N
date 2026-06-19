@@ -197,31 +197,31 @@
       <svg class="glyph" viewBox="0 0 100 100" id="glyph"></svg>
       <div><div class="nm">A<b>X</b>O<b>N</b></div><div class="tg">synaptic intelligence</div></div>
     </div>
-    <div class="topstat"><span class="dot"></span><span>CORE ONLINE</span></div>
-    <div class="topstat"><span class="dot" style="background:var(--accent2);box-shadow:0 0 8px var(--accent2)"></span><span>GRAPH SYNCED</span></div>
+    <div class="topstat"><span class="dot"></span><span id="core-health">CORE CONNECTING</span></div>
+    <div class="topstat"><span class="dot" style="background:var(--accent2);box-shadow:0 0 8px var(--accent2)"></span><span id="data-health">DATA PENDING</span></div>
     <div class="sep"></div>
-    <div class="topicons"><span>uptime <b id="uptime">00:00:00</b></span><span>latency <b id="lat">12ms</b></span></div>
+    <div class="topicons"><span>uptime <b id="uptime">--:--:--</b></span><span>latency <b id="lat">--</b></span></div>
     <button class="themebtn" id="themebtn"><span class="sw"></span><span id="theme-name">Synapse</span></button>
     <div class="clock" id="clock">--:--:--</div>
   </header>
 
   <aside class="panel left reveal" style="animation-delay:.18s">
     <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
-    <div class="ptitle"><span class="lbl">Neural monitor</span><span class="lbl" id="load">load 0.42</span></div>
-    <div class="gauge"><div class="row"><span class="name"><span class="ric"></span>Inference</span><span class="val"><b id="cpu-v">0</b>%</span></div><div class="bar"><i id="cpu-b" style="width:0"></i></div></div>
-    <div class="gauge"><div class="row"><span class="name"><span class="ric"></span>Memory</span><span class="val"><b id="mem-v">0</b>%</span></div><div class="bar"><i id="mem-b" style="width:0"></i></div></div>
-    <div class="gauge"><div class="row"><span class="name"><span class="ric"></span>Tensor cores</span><span class="val"><b id="gpu-v">0</b>%</span></div><div class="bar"><i id="gpu-b" style="width:0"></i></div></div>
-    <div class="gauge"><div class="row"><span class="name"><span class="ric"></span>Thermal</span><span class="val"><b id="tmp-v">0</b>°C</span></div><div class="bar warn"><i id="tmp-b" style="width:0"></i></div></div>
+    <div class="ptitle"><span class="lbl">System monitor</span><span class="lbl" id="load">awaiting data</span></div>
+    <div class="gauge"><div class="row"><span class="name"><span class="ric"></span>CPU</span><span class="val"><b id="cpu-v">--</b>%</span></div><div class="bar"><i id="cpu-b" style="width:0"></i></div></div>
+    <div class="gauge"><div class="row"><span class="name"><span class="ric"></span>Memory</span><span class="val"><b id="mem-v">--</b>%</span></div><div class="bar"><i id="mem-b" style="width:0"></i></div></div>
+    <div class="gauge"><div class="row"><span class="name"><span class="ric"></span>Disk</span><span class="val"><b id="disk-v">--</b>%</span></div><div class="bar"><i id="disk-b" style="width:0"></i></div></div>
+    <div class="gauge"><div class="row"><span class="name"><span class="ric"></span>Battery</span><span class="val"><b id="battery-v">N/A</b><span id="battery-unit"></span></span></div><div class="bar warn"><i id="battery-b" style="width:0"></i></div></div>
     <div class="ptitle" style="margin-top:4px"><span class="lbl">Throughput</span></div>
     <div class="net"><div><div class="k">▲ Out</div><div class="v" id="up">0.0<small> Mb/s</small></div></div><div><div class="k">▼ In</div><div class="v" id="down">0.0<small> Mb/s</small></div></div></div>
     <canvas id="spark" class="spark"></canvas>
-    <div class="ptitle" style="margin-top:auto"><span class="lbl">Active synapses</span><span class="val mono" style="color:var(--text)"><span id="proc">0</span> firing</span></div>
+    <div class="ptitle" style="margin-top:auto"><span class="lbl">AI requests</span><span class="val mono" style="color:var(--text)"><span id="proc">0</span> processed</span></div>
   </aside>
 
   <main class="core" id="core-area">
     <canvas id="core-canvas"></canvas>
     <div class="quick">
-      <span class="chip">MODEL <b>AX-7</b></span><span class="chip">PARAMS <b>7.4B</b></span><span class="chip">VOICE <b id="voice-chip">IDLE</b></span>
+      <span class="chip">MODEL <b id="model-chip">PENDING</b></span><span class="chip">BACKEND <b id="backend-chip">PENDING</b></span><span class="chip">VOICE <b id="voice-chip">IDLE</b></span>
     </div>
     <div class="reason" id="reason"><div class="rh">Reasoning</div><div id="reason-steps"></div></div>
     <div class="core-readout"><div class="status" id="status">STANDBY</div><div class="greeting" id="greeting">Awaiting your command.</div></div>
@@ -230,7 +230,7 @@
 
   <aside class="panel right reveal" style="animation-delay:.3s">
     <span class="corner tl"></span><span class="corner tr"></span>
-    <div class="ph"><span class="lbl">Conversation</span><span class="lbl">session #4817</span></div>
+    <div class="ph"><span class="lbl">Conversation</span><span class="lbl" id="session-id">session pending</span></div>
     <div class="log" id="log"></div>
     <div class="drawer">
       <div class="tabs"><div class="tab on" data-t="mem">Memory</div><div class="tab" data-t="agents">Agents</div><div class="tab" data-t="skills">Skills</div><div class="tab" data-t="ai">AI</div><div class="tab" data-t="audit">Audit</div><div class="tab" data-t="voice">Voice</div><div class="tab" data-t="diag">Diag</div></div>
@@ -251,7 +251,7 @@
       <div class="toprow"><span class="lbl" id="wave-label">Acoustic input · muted</span><canvas id="wave-strip"></canvas></div>
       <div class="inputwrap"><input id="cmd" type="text" placeholder="Speak with AXON…  (try “status report”)" autocomplete="off"><button class="send" id="send">SEND</button></div>
     </div>
-    <div class="badge"><span class="l1">SYNAPTIC BUILD</span><span class="l2">v1.0.0</span></div>
+    <div class="badge"><span class="l1">SYNAPTIC BUILD</span><span class="l2" id="build-version">pending</span></div>
   </footer>
 </div>
 
@@ -263,7 +263,7 @@ const reduce=window.matchMedia('(prefers-reduced-motion:reduce)').matches;
 function fit(c){const r=c.getBoundingClientRect();c.width=Math.max(1,r.width*dpr());c.height=Math.max(1,r.height*dpr());const x=c.getContext('2d');x.setTransform(dpr(),0,0,dpr(),0,0);return x;}
 
 let connected=false,listening=false,amp=0,ampTarget=0.12,thinking=0,t0=Date.now(),lastT=performance.now();
-const C={cpu:14,mem:38,gpu:9,tmp:46,up:1.2,down:4.4,proc:0};
+const C={cpu:null,mem:null,disk:null,battery:null,up:null,down:null,requests:0,latency:null,uptime_seconds:null};
 
 /* ---------- themes ---------- */
 const THEMES={
@@ -322,7 +322,7 @@ function updateBrain(dt,time){
   if(spawnAcc>interval){spawnAcc=0;const s=NODES[Math.floor(Math.random()*NODES.length)];s.act=1;emit(s,1);}
   for(let i=PULSES.length-1;i>=0;i--){const p=PULSES[i];p.t+=p.sp*dt*1.5;
     if(p.t>=1){p.to.act=Math.max(p.to.act,p.en);if(p.en>0.34&&Math.random()<0.6)emit(p.to,p.en*0.72);PULSES.splice(i,1);}}
-  let firing=0;for(const n of NODES){n.act*=Math.pow(0.16,dt);if(n.act>0.25)firing++;}C.proc=firing;
+  for(const n of NODES)n.act*=Math.pow(0.16,dt);
   thinking=Math.max(0,thinking-dt*0.5);
 }
 function drawBrain(time){if(Math.abs(core.getBoundingClientRect().width-W)>2)buildBrain();
@@ -370,23 +370,19 @@ function loop(now){const time=Date.now()-t0,dt=Math.min(0.05,(now-lastT)/1000);l
   if(micOn)readMic();amp=lerp(amp,ampTarget,0.12);
   if(!reduce)drawStars();
   updateBrain(dt,time);drawBrain(time);drawStrip(time);drawMic(time);
-  $('#proc').textContent=C.proc;requestAnimationFrame(loop);}
+  requestAnimationFrame(loop);}
 buildBrain();requestAnimationFrame(loop);
 
 /* ---------- telemetry ---------- */
-function renderTelemetry(){$('#cpu-v').textContent=Math.round(C.cpu);$('#cpu-b').style.width=C.cpu+'%';
-  $('#mem-v').textContent=Math.round(C.mem);$('#mem-b').style.width=C.mem+'%';
-  $('#gpu-v').textContent=Math.round(C.gpu);$('#gpu-b').style.width=C.gpu+'%';
-  $('#tmp-v').textContent=Math.round(C.tmp);$('#tmp-b').style.width=clamp((C.tmp-30)/45*100,0,100)+'%';
-  $('#up').innerHTML=C.up.toFixed(1)+'<small> Mb/s</small>';$('#down').innerHTML=C.down.toFixed(1)+'<small> Mb/s</small>';
-  $('#load').textContent='load '+(C.cpu/100*1.8).toFixed(2);hist.push(C.down);if(hist.length>40)hist.shift();drawSpark();}
-function walk(v,lo,hi,s){v+=rnd(-s,s);return clamp(v,lo,hi);}
-setInterval(()=>{if(connected)return;C.cpu=walk(C.cpu,6,72,9);C.mem=walk(C.mem,28,68,5);C.gpu=walk(C.gpu,listening?22:5,listening?92:34,11);
-  C.tmp=walk(C.tmp,42,71,3);C.up=walk(C.up,0.4,9,1.4);C.down=walk(C.down,1,42,7);$('#lat').textContent=Math.round(rnd(8,22))+'ms';renderTelemetry();},1300);
+function metric(value,id,bar){const ok=Number.isFinite(value);$(id).textContent=ok?Math.round(value):'--';$(bar).style.width=(ok?clamp(value,0,100):0)+'%';}
+function duration(total){if(!Number.isFinite(total))return '--:--:--';const s=Math.max(0,Math.floor(total)),p=n=>String(n).padStart(2,'0');return p(Math.floor(s/3600))+':'+p(Math.floor(s/60)%60)+':'+p(s%60);}
+function rate(value){return Number.isFinite(value)?value.toFixed(1)+'<small> Mb/s</small>':'--';}
+function renderTelemetry(){metric(C.cpu,'#cpu-v','#cpu-b');metric(C.mem,'#mem-v','#mem-b');metric(C.disk,'#disk-v','#disk-b');const hasBattery=Number.isFinite(C.battery);$('#battery-v').textContent=hasBattery?Math.round(C.battery):'N/A';$('#battery-unit').textContent=hasBattery?'%':'';$('#battery-b').style.width=(hasBattery?clamp(C.battery,0,100):0)+'%';
+  $('#up').innerHTML=rate(C.up);$('#down').innerHTML=rate(C.down);$('#proc').textContent=Number.isFinite(C.requests)?Math.round(C.requests):'--';
+  $('#lat').textContent=Number.isFinite(C.latency)&&C.latency>0?Math.round(C.latency)+'ms':'--';$('#uptime').textContent=duration(C.uptime_seconds);
+  $('#load').textContent='live '+new Date().toLocaleTimeString('en-GB',{hour12:false});if(Number.isFinite(C.down)){hist.push(C.down);if(hist.length>40)hist.shift();}drawSpark();}
 
-setInterval(()=>{const d=new Date();$('#clock').textContent=d.toLocaleTimeString('en-GB',{hour12:false});
-  const s=Math.floor((Date.now()-t0)/1000),p=n=>String(n).padStart(2,'0');
-  $('#uptime').textContent=p(Math.floor(s/3600))+':'+p(Math.floor(s/60)%60)+':'+p(s%60);},1000);
+setInterval(()=>{$('#clock').textContent=new Date().toLocaleTimeString('en-GB',{hour12:false});},1000);
 
 /* ---------- conversation ---------- */
 const log=$('#log'); let typingNode=null;
@@ -410,50 +406,40 @@ function pushThought(text){reasonBox.classList.add('show');const prev=reasonStep
 /* ---------- memory + agents ---------- */
 const memBody=$('#tab-mem'),agBody=$('#tab-agents');
 const panelBodies={mem:memBody,agents:agBody,skills:$('#tab-skills'),ai:$('#tab-ai'),audit:$('#tab-audit'),voice:$('#tab-voice'),diag:$('#tab-diag')};
-let PANEL={skills:[],ai:{},audit:{logs:[],commands:[]},voice:{},diagnostics:{},status:{}};
-function addMemory(text){const el=document.createElement('div');el.className='mem';
-  const now=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-  el.innerHTML='<span class="mi">◈</span><span></span>';el.children[1].innerHTML='';el.children[1].textContent=text;
-  const s=document.createElement('small');s.textContent='stored · '+now;el.children[1].appendChild(s);
-  memBody.insertBefore(el,memBody.firstChild);}
+let PANEL={memory:[],agents:[],skills:[],ai:{},audit:{logs:[],commands:[]},voice:{},diagnostics:{},status:{}};
+function setMemories(list){memBody.innerHTML='';(list||[]).forEach(m=>{const el=document.createElement('div');el.className='mem';
+  el.innerHTML='<span class="mi">◈</span><span></span>';el.children[1].textContent=m.content||'';
+  const s=document.createElement('small');s.textContent=[m.type,m.source,m.timestamp].filter(Boolean).join(' · ');el.children[1].appendChild(s);memBody.appendChild(el);});
+  if(!memBody.children.length)memBody.innerHTML='<div class="mem">No persisted memories.</div>';}
+function addMemory(text){setMemories([{content:text,type:'live event'},...(PANEL.memory||[])]);}
 function setAgents(list){agBody.innerHTML='';list.forEach(a=>{const el=document.createElement('div');el.className='agent';
-  const col=a.status==='active'?'var(--green)':a.status==='busy'?'var(--amber)':'var(--faint)';
+  const col=a.status==='active'?'var(--green)':a.status==='busy'||a.status==='loading'?'var(--amber)':'var(--faint)';
   el.innerHTML='<span class="ad" style="background:'+col+';box-shadow:0 0 8px '+col+'"></span><span class="an"></span><span class="as"></span>';
   el.querySelector('.an').textContent=a.name;el.querySelector('.as').textContent=a.status||'idle';agBody.appendChild(el);});}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function pills(list){return (list||[]).map(x=>'<span class="pill">'+esc(x)+'</span>').join('');}
 function kv(obj){return '<div class="kv">'+Object.entries(obj||{}).map(([k,v])=>'<span class="k">'+esc(k)+'</span><span>'+esc(Array.isArray(v)?v.join(' → '):v)+'</span>').join('')+'</div>';}
 function renderPanels(){
+  setMemories(PANEL.memory||[]);setAgents(PANEL.agents||[]);
   panelBodies.skills.innerHTML=(PANEL.skills||[]).map(s=>'<div class="skillrow"><div class="skilltop"><b>'+esc(s.name)+'</b><small>'+esc(s.sensitive?'sensitive':'standard')+'</small><button class="toggle '+(s.enabled?'on':'')+'" data-skill="'+esc(s.name)+'" aria-label="Toggle '+esc(s.name)+'"></button></div><div>'+esc(s.description)+'</div><div>'+pills(s.intents)+'</div></div>').join('')||'<div class="mem">No skills discovered.</div>';
-  panelBodies.ai.innerHTML=kv({active:PANEL.ai?.health?.active||'rules',chain:(PANEL.ai?.health?.chain||[]).concat(['rules']).join(' → '),total:PANEL.ai?.metrics?.total||0,fast_path_hits:PANEL.ai?.metrics?.fast_path_hits||0,fallback_to_rules:PANEL.ai?.metrics?.fallback_to_rules||0})+'<div style="margin-top:8px">'+pills(Object.keys(PANEL.ai?.health?.backends||{}))+'</div>';
+  const backends=Object.entries(PANEL.ai?.health?.backends||{}).map(([name,data])=>name+': '+(data.available?'online':'offline')+' ('+(data.model||'unknown')+')');
+  panelBodies.ai.innerHTML=kv({active:PANEL.ai?.health?.active||'rules',chain:(PANEL.ai?.health?.chain||[]).concat(['rules']).join(' → '),total:PANEL.ai?.metrics?.total||0,fast_path_hits:PANEL.ai?.metrics?.fast_path_hits||0,fallback_to_rules:PANEL.ai?.metrics?.fallback_to_rules||0})+'<div style="margin-top:8px">'+pills(backends)+'</div>';
   const logs=(PANEL.audit?.logs||[]).slice(-40).reverse().map(l=>'<div class="auditrow"><div class="m">'+esc(l.message)+'</div><div class="meta">'+esc(l.ts)+' · '+esc(l.source)+' · '+esc(l.level)+'</div></div>').join('');
   const cmds=(PANEL.audit?.commands||[]).slice(-20).reverse().map(c=>'<div class="auditrow"><div class="m">'+esc(c.intent)+' → '+esc(c.skill_used)+' · '+esc(c.success?'ok':'blocked')+'</div><div class="meta">wake '+esc(c.wake_detected)+' · '+esc(c.command_type)+'</div></div>').join('');
   panelBodies.audit.innerHTML=(cmds||'')+(logs||'')||'<div class="mem">No audit events yet.</div>';
   panelBodies.voice.innerHTML=kv(PANEL.voice||{});
   panelBodies.diag.innerHTML=kv(Object.assign({},PANEL.status||{},PANEL.diagnostics||{}));
-  panelBodies.skills.querySelectorAll('.toggle').forEach(btn=>btn.onclick=async()=>{const on=!btn.classList.contains('on');btn.classList.toggle('on',on);if(connected&&bridge())try{PANEL=await window.pywebview.api.set_skill_enabled(btn.dataset.skill,on);window.pywebview.api.get_panel_data().then(setPanelData);}catch(e){}});
+  const status=PANEL.status||{};$('#model-chip').textContent=status.model||'rule-based';$('#backend-chip').textContent=status.backend||'rules';
+  $('#session-id').textContent=status.session?'session '+status.session:'session unavailable';$('#build-version').textContent=status.version?'v'+status.version:'unknown';
+  $('#status').textContent=String(status.state||'unknown').toUpperCase();$('#core-health').textContent='CORE '+String(status.state||'unknown').toUpperCase();$('#data-health').textContent='PROJECT DATA LIVE';
+  panelBodies.skills.querySelectorAll('.toggle').forEach(btn=>btn.onclick=async()=>{const on=!btn.classList.contains('on');btn.classList.toggle('on',on);if(connected&&bridge())try{await window.pywebview.api.set_skill_enabled(btn.dataset.skill,on);window.pywebview.api.get_panel_data().then(setPanelData);}catch(e){window.pywebview.api.get_panel_data().then(setPanelData);}});
 }
 function setPanelData(data){PANEL=data||PANEL;renderPanels();}
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');
   Object.entries(panelBodies).forEach(([k,b])=>{b.style.display=k===t.dataset.t?'block':'none';});});
 
-/* ---------- demo brain (standalone mode) ---------- */
-const demoReplies=["Acknowledged. The relevant pathways are already lighting up.","All layers nominal — I'll keep the graph under watch.","Done. Weights updated and the action is logged to memory.","Inference complete; nothing anomalous in the activations.","Understood. I've prioritised that across the synaptic cores."];
-let rIdx=0;
-function demoRespond(text){const l=text.toLowerCase();let reply,steps,mem;
-  if(/status|report|diagnostic/.test(l)){steps=['Parsing intent: system status','Sampling telemetry','Composing summary'];
-    reply="Status: inference "+Math.round(C.cpu)+"%, memory "+Math.round(C.mem)+"%, thermal "+Math.round(C.tmp)+"°C, "+C.proc+" synapses firing.";}
-  else if(/remember|note|save/.test(l)){steps=['Extracting fact','Writing to memory store'];reply="Saved. I'll remember that.";mem=text.replace(/^(remember|note|save)\s*(that)?\s*/i,'');}
-  else if(/hello|hi |hey/.test(l)){steps=['Recognising greeting'];reply="Hello. The network is warm and ready.";}
-  else if(/who are you|your name/.test(l)){steps=['Retrieving identity'];reply="I'm AXON — a synaptic intelligence wired into this system.";}
-  else{steps=['Parsing intent','Routing to relevant agents','Composing response'];reply=demoReplies[rIdx++%demoReplies.length];}
-  reason(steps);showTyping();const dur=steps.length*750+700;
-  setTimeout(()=>{hideTyping();addMsg('AXON',reply,'ai');if(mem)addMemory(mem);},dur);}
-
-function applyListening(on){listening=on;ampTarget=on?(micOn?ampTarget:0.85):0.12;
-  $('#mic').classList.toggle('on',on);$('#status').textContent=on?'LISTENING':'STANDBY';$('#status').style.color=on?'var(--green)':'var(--accent)';
-  $('#greeting').textContent=on?'I\u2019m listening — go ahead.':'Awaiting your command.';
-  $('#voice-chip').textContent=on?'LIVE':'IDLE';$('#voice-chip').style.color=on?'var(--green)':'var(--accent)';
+function applyListening(on){listening=on;ampTarget=on?ampTarget:0.12;
+  $('#mic').classList.toggle('on',on);
   $('#wave-label').textContent=on?'Acoustic input · capturing':'Acoustic input · muted';}
 
 /* ---------- real microphone ---------- */
@@ -469,25 +455,18 @@ function readMic(){if(!an)return;an.getByteTimeDomainData(micData);let s=0;for(l
 /* ---------- input wiring ---------- */
 function bridge(){return window.pywebview&&window.pywebview.api;}
 function submit(){const v=$('#cmd').value.trim();if(!v)return;addMsg('You',v,'me');$('#cmd').value='';
-  if(connected&&bridge()){showTyping();window.pywebview.api.command(v);}else demoRespond(v);}
+  if(connected&&bridge()){showTyping();window.pywebview.api.command(v);}else addMsg('AXON','Project bridge unavailable. Start AXON through run.py.','ai');}
 $('#send').onclick=submit;$('#cmd').addEventListener('keydown',e=>{if(e.key==='Enter')submit();});
 async function toggleMic(){
   if(connected&&bridge()){window.pywebview.api.toggle_listening();return;}
-  if(!listening){applyListening(true);const ok=await startMic();
-    if(ok){pushThought('Microphone live — listening for input');}else{pushThought('Mic unavailable here — using simulated input');}
-    showTyping();setTimeout(()=>{hideTyping();addMsg('AXON',ok?'Microphone active — the waveform now follows your voice.':'I couldn\u2019t open the mic in this context, so I\u2019m simulating input. In your app, allow microphone access in WebView2.','ai');},800);}
-  else{applyListening(false);stopMic();}}
+  addMsg('AXON','Project microphone bridge unavailable. Start AXON through run.py.','ai');}
 $('#mic').onclick=toggleMic;$('#mic').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggleMic();}});
 
 /* ---------- boot ---------- */
-const steps=['initialising synaptic graph…','allocating 7.4B parameters…','wiring dendrites…','priming the cortex…','attention online…','AXON online.'];
+const steps=['initialising project interface…','connecting runtime bridge…','loading project state…','starting telemetry…','AXON interface ready.'];
 let si=0;const bsub=$('#boot-sub');let bootDone=false;
 function finishBoot(){if(bootDone)return;bootDone=true;$('#boot').classList.add('done');
-  if(!connected){
-    setAgents([{name:'Speech I/O',status:'active'},{name:'Memory store',status:'active'},{name:'Web tools',status:'idle'},{name:'Home automation',status:'idle'},{name:'Code runner',status:'idle'}]);
-    addMemory('User prefers concise status summaries');addMemory('Primary workstation: Windows desktop');
-    addMsg('AXON','Good evening. The network is online and every layer is nominal. How can I help?','ai');
-    setTimeout(()=>addMsg('AXON','Try a command like “status report”, tap the mic to speak, or switch themes from the top bar.','ai'),1400);}
+  if(!bridge()){$('#core-health').textContent='CORE OFFLINE';$('#data-health').textContent='PROJECT BRIDGE UNAVAILABLE';}
   if(bridge())try{window.pywebview.api.on_ready();}catch(e){}}
 const bt=setInterval(()=>{bsub.textContent=steps[si++];if(si>=steps.length){clearInterval(bt);setTimeout(finishBoot,650);}},480);
 
@@ -504,12 +483,11 @@ const API={
   pushThought(text){pushThought(text);},
   setListening(on){applyListening(!!on);},
   setAmplitude(v){if(!micOn)ampTarget=clamp(Number(v)||0,0,1);},
-  setStatus(s){$('#status').textContent=s;},setGreeting(s){$('#greeting').textContent=s;},setVoiceChip(s){$('#voice-chip').textContent=s;},
+  setStatus(s){$('#status').textContent=s;$('#core-health').textContent='CORE '+String(s||'unknown').toUpperCase();},setGreeting(s){$('#greeting').textContent=s;},setVoiceChip(s){$('#voice-chip').textContent=s;},
   addMemory(text){addMemory(text);},setAgents(list){setAgents(list||[]);},
   setPanelData(data){setPanelData(data);},
   setTheme(name){const k=Object.keys(THEMES).indexOf(name);if(k>=0){themeIdx=k;setTheme(name);}},
-  setTelemetry(o){o=o||{};for(const k of ['cpu','mem','gpu','tmp','up','down','proc'])if(o[k]!=null)C[k]=Number(o[k]);
-    if(o.latency!=null)$('#lat').textContent=Math.round(o.latency)+'ms';renderTelemetry();},
+  setTelemetry(o){o=o||{};for(const k of ['cpu','mem','disk','battery','up','down','requests','latency','uptime_seconds'])if(Object.prototype.hasOwnProperty.call(o,k))C[k]=o[k]==null?null:Number(o[k]);renderTelemetry();},
   boot(done){if(done)finishBoot();}
 };
 window.AXON=API;

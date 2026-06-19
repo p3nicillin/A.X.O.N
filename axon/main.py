@@ -120,6 +120,7 @@ def main() -> None:
     stt = SttEngine(config)
     audio = AudioInput(config, bus, stt)
     orchestrator = Orchestrator(config, bus, registry, tts, audio)
+    orchestrator.audit_session_id = audit.session_id
 
     # §16 autonomy is opt-in (it observes the system). Construct it here so it
     # can share the orchestrator's user model + memory, but start it with the
@@ -131,6 +132,7 @@ def main() -> None:
             config, bus, sensor=ContextSensor(),
             scheduler=TaskScheduler(DATA_DIR / "tasks.json"),
             user_model=orchestrator.user_model, memory=orchestrator.memory)
+    orchestrator.autonomy = autonomy
 
     backend = select_backend(config)
 

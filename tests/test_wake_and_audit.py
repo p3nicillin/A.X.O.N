@@ -3,6 +3,7 @@ import json
 
 from axon.config import Config
 from axon.core.event_bus import Event, EventBus
+from axon.enterprise import audit as audit_module
 from axon.enterprise.audit import AuditLogger
 from axon.perception.wake_word import WakeWord
 
@@ -48,7 +49,8 @@ def test_wake_word_fuzzy_rejects_unrelated_words():
     assert heard is False
 
 
-def test_audit_chain_is_tamper_evident():
+def test_audit_chain_is_tamper_evident(tmp_path, monkeypatch):
+    monkeypatch.setattr(audit_module, "LOG_DIR", tmp_path)
     cfg = Config(); cfg.audit_enabled = True
     bus = EventBus()
     audit = AuditLogger(cfg, bus)

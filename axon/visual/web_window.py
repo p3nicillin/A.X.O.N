@@ -25,6 +25,7 @@ from pathlib import Path
 
 import webview
 
+from .. import __version__
 from ..config import DATA_DIR
 from ..core.event_bus import Event, EventBus
 from ..core.states import AxonState
@@ -59,6 +60,8 @@ class Bridge:
         self._listening = False
         self._last_amp = 0.0
         self._amp_at = 0.0
+        self._started_at = time.time()
+        self._last_latency_ms = 0.0
         self._logs = deque(maxlen=200)
         self._commands = deque(maxlen=200)
         # net counters for throughput readout
@@ -71,9 +74,13 @@ class Bridge:
     def on_ready(self) -> bool:
         """Fired once the page's boot sequence completes."""
         self.ready.set()
-        self.set_agents(self._agents())
-        self.set_greeting("All systems nominal. How may I help, sir?")
-        self.set_panel_data(self.panel_snapshot())
+        data = self.panel_snapshot()
+        enabled = sum(skill["enabled"] for skill in data["skills"])
+        status = data["status"]
+        self.set_greeting(
+            f"{status['model']} via {status['backend']} is active. "
+            f"{enabled} of {len(data['skills'])} skills enabled.")
+        self.set_panel_data(data)
         return True
 
     def command(self, text: str) -> bool:
@@ -214,6 +221,7 @@ class Bridge:
         self.set_amplitude(level)
 
     def _on_intent(self, packet) -> None:
+        self._last_latency_ms = float(getattr(packet, "latency_ms", 0.0) or 0.0)
         thought = getattr(packet, "thought", "")
         if thought:
             self.push_thought(thought)
@@ -231,28 +239,24 @@ class Bridge:
             "message": payload.get("message", ""),
             "ts": time.strftime("%H:%M:%S"),
         })
-        # surface durable memories written by the orchestrator (§4) in the
-        # AXON memory drawer: messages look like "remembered [preference] …".
-        if payload.get("source") == "memory":
-            message = payload.get("message", "")
-            if message.startswith("remembered"):
-                # strip the "remembered [type] " prefix for a clean card
-                content = message.split("] ", 1)[-1] if "] " in message else message
-                self.add_memory(content)
         self.set_panel_data(self.panel_snapshot())
 
     # ====================  telemetry  ====================
-    def _agents(self) -> list[dict]:
+    def _agents(self, ai_health: dict | None = None) -> list[dict]:
         audio = getattr(self.orch, "audio_input", None)
-        mic_on = bool(getattr(audio, "available", False))
-        mem_on = getattr(self.orch, "memory", None) is not None
-        n_skills = len(self.orch.registry.catalogue())
+        stt = getattr(audio, "stt", None)
+        memory = getattr(self.orch, "memory", None)
+        ai_health = ai_health or self.orch.ai.health()
+        skills = self.orch.registry.catalogue()
+        enabled = sum(self.orch.registry.is_enabled(m.name) for m in skills)
         return [
-            {"name": "Speech I/O", "status": "active" if mic_on else "idle"},
-            {"name": "Memory store", "status": "active" if mem_on else "idle"},
-            {"name": "Intent engine", "status": "active"},
-            {"name": f"Skills ({n_skills})", "status": "active"},
-            {"name": "Audit trail", "status": "active"},
+            {"name": "Microphone", "status": "active" if bool(getattr(audio, "_running", False)) else "offline"},
+            {"name": "Speech recognition", "status": "active" if bool(getattr(stt, "available", False)) else ("loading" if bool(getattr(stt, "can_load", lambda: False)()) else "offline")},
+            {"name": "Memory store", "status": "active" if memory is not None else "disabled"},
+            {"name": f"Intent engine ({ai_health.get('active', 'rules')})", "status": "active"},
+            {"name": f"Skills ({enabled}/{len(skills)})", "status": "active" if enabled else "disabled"},
+            {"name": "Audit trail", "status": "active" if self.config.audit_enabled else "disabled"},
+            {"name": "Autonomy", "status": "active" if getattr(self.orch, "autonomy", None) is not None else "disabled"},
         ]
 
     def snapshot(self) -> dict:
@@ -275,16 +279,28 @@ class Bridge:
             pass
         return {
             "cpu": cpu, "mem": mem,
-            "gpu": disk,                     # repurpose the GPU gauge for disk
-            "tmp": 42.0 + cpu * 0.28,        # derived thermal proxy
+            "disk": disk, "battery": m.get("battery"),
             "up": up, "down": down,
-            "latency": 8 + cpu * 0.2,
+            "requests": getattr(getattr(self.orch.ai, "metrics", None), "total", 0),
+            "latency": self._last_latency_ms,
+            "uptime_seconds": max(0, int(time.time() - self._started_at)),
         }
 
     def panel_snapshot(self) -> dict:
         ai_health = self.orch.ai.health()
         ai_metrics = getattr(getattr(self.orch, "ai", None), "metrics", None)
         metrics = ai_metrics.snapshot() if ai_metrics is not None else {}
+        memory_store = getattr(self.orch, "memory", None)
+        memories = []
+        if memory_store is not None:
+            try:
+                memories = [entry.as_dict() for entry in memory_store.all_entries()]
+                memories.sort(key=lambda entry: entry.get("timestamp", ""), reverse=True)
+            except Exception:
+                memories = []
+        active = ai_health.get("active", "rules")
+        active_info = ai_health.get("backends", {}).get(active, {})
+        state = getattr(self.orch, "state", AxonState.IDLE)
         skills = []
         for skill in self.orch.registry.skills:
             m = skill.manifest
@@ -305,13 +321,18 @@ class Bridge:
             })
         return {
             "status": {
-                "backend": ai_health.get("active", "rules"),
+                "backend": active,
+                "model": active_info.get("model", "rule-based"),
                 "chain": (ai_health.get("chain") or []) + ["rules"],
                 "wake_word": self.config.wake_word,
                 "wake_required": self.config.require_wake_word,
                 "mic": bool(getattr(getattr(self.orch, "audio_input", None), "available", False)),
-                "state": str(getattr(self.orch, "state", "idle")),
+                "state": getattr(state, "value", str(state)),
+                "session": getattr(self.orch, "audit_session_id", ""),
+                "version": __version__,
             },
+            "memory": memories,
+            "agents": self._agents(ai_health),
             "skills": skills,
             "ai": {"health": ai_health, "metrics": metrics},
             "audit": {
@@ -319,9 +340,11 @@ class Bridge:
                 "commands": list(self._commands)[-80:],
             },
             "voice": {
-                "tts_backend": "SAPI5" if self.config.tts_voice else "system default",
+                "tts_backend": "SAPI5" if bool(getattr(self.orch.tts, "available", False)) else "unavailable",
                 "voice": self.config.tts_voice or "system default",
                 "rate": self.config.tts_rate,
+                "stt": "online" if bool(getattr(getattr(self.orch.audio_input, "stt", None), "available", False)) else "offline",
+                "stt_model": Path(getattr(getattr(self.orch.audio_input, "stt", None), "_cmd_path", "") or "").name or "none",
                 "wake_ack": self.config.wake_ack_phrase,
                 "persona": "AXON",
                 "address_term": self.config.address_term,
@@ -333,6 +356,7 @@ class Bridge:
                 "audit_enabled": self.config.audit_enabled,
                 "disabled_skills": list(self.config.disabled_skills),
                 "memory_enabled": self.config.memory_enabled,
+                "memory_entries": len(memories),
                 "planning_enabled": self.config.planning_enabled,
                 "critic_enabled": self.config.critic_enabled,
                 "confirm_sensitive": self.config.confirm_sensitive,
