@@ -1,0 +1,12 @@
+{
+  "name": "VolumeSkill",
+  "version": "1.0.0",
+  "description": "Adjusts or mutes the system volume via the OS volume keys.",
+  "intents": ["volume_up", "volume_down", "mute_toggle"],
+  "intent_params": {
+    "volume_up": ["steps"],
+    "volume_down": ["steps"]
+  },
+  "sensitive": false,
+  "author": "core"
+}

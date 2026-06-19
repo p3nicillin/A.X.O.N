@@ -49,6 +49,31 @@ def test_unknown_command_classified_as_unknown():
     assert p.command_type == "UNKNOWN"
 
 
+def test_media_and_volume_and_window_intents_parse():
+    assert parse("pause the music").intent.type == "play_pause"
+    assert parse("next track").intent.type == "next_track"
+    assert parse("previous track").intent.type == "previous_track"
+    assert parse("volume up").intent.type == "volume_up"
+    assert parse("turn it down").intent.type == "volume_down"
+    assert parse("mute").intent.type == "mute_toggle"
+    assert parse("minimize the window").intent.type == "minimize_window"
+    assert parse("maximize this window").intent.type == "maximize_window"
+
+
+def test_clipboard_intents_parse():
+    p = parse("copy Hello World to the clipboard")
+    assert p.intent.type == "set_clipboard"
+    assert p.intent.parameters["text"] == "Hello World"
+    assert parse("read my clipboard").intent.type == "read_clipboard"
+
+
+def test_new_intents_have_command_categories():
+    assert command_type_for("play_pause") == "MEDIA_CONTROL"
+    assert command_type_for("volume_up") == "VOLUME_CONTROL"
+    assert command_type_for("minimize_window") == "WINDOW_CONTROL"
+    assert command_type_for("read_clipboard") == "CLIPBOARD"
+
+
 def test_command_type_mapping_covers_six_categories():
     assert command_type_for("get_time") == "TIME_DATE"
     assert command_type_for("open_app") == "APP_CONTROL"

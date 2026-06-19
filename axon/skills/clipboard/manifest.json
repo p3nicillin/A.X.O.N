@@ -1,0 +1,11 @@
+{
+  "name": "ClipboardSkill",
+  "version": "1.0.0",
+  "description": "Reads the clipboard text or replaces it with provided text.",
+  "intents": ["read_clipboard", "set_clipboard"],
+  "intent_params": {
+    "set_clipboard": ["text"]
+  },
+  "sensitive": false,
+  "author": "core"
+}

@@ -10,7 +10,9 @@ def reg():
 def test_all_skills_discovered():
     names = {m.name for m in reg().catalogue()}
     assert {"TimeDateSkill", "AppLauncherSkill", "SystemInfoSkill",
-            "WebSearchSkill", "NotesSkill", "FileSystemSkill"} <= names
+            "WebSearchSkill", "NotesSkill", "FileSystemSkill",
+            "MediaControlSkill", "VolumeSkill", "WindowControlSkill",
+            "ClipboardSkill"} <= names
 
 
 def test_manifest_contract():
@@ -58,6 +60,21 @@ def test_filesystem_is_sandboxed():
 def test_filesystem_skill_is_marked_sensitive():
     fs = next(m for m in reg().catalogue() if m.name == "FileSystemSkill")
     assert fs.sensitive is True
+
+
+def test_clipboard_set_rejects_empty_text():
+    res = reg().execute(Intent(type="set_clipboard", parameters={"text": "  "}))
+    assert res.ok is False
+
+
+def test_new_control_intents_route():
+    # Routing only — no OS side effects are triggered here.
+    r = reg()
+    for it in ("play_pause", "next_track", "previous_track", "volume_up",
+               "volume_down", "mute_toggle", "minimize_window",
+               "maximize_window", "restore_window", "read_clipboard",
+               "set_clipboard"):
+        assert r.route(Intent(type=it)) is not None, it
 
 
 def test_notes_roundtrip():

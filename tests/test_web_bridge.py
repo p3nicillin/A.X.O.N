@@ -61,7 +61,9 @@ def test_panel_snapshot_uses_live_project_objects():
     assert data["status"]["model"] == "test-model"
     assert data["memory"][0]["content"] == "persisted project memory"
     assert data["ai"]["metrics"]["total"] == 3
-    assert len(data["skills"]) == 6
+    skill_names = {s["name"] for s in data["skills"]}
+    assert {"AppLauncherSkill", "MediaControlSkill", "VolumeSkill",
+            "WindowControlSkill", "ClipboardSkill"} <= skill_names
     assert any(agent["name"] == "Speech recognition" and
                agent["status"] == "active" for agent in data["agents"])
     assert data["voice"]["tts_backend"] == "SAPI5"

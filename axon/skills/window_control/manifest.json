@@ -1,0 +1,9 @@
+{
+  "name": "WindowControlSkill",
+  "version": "1.0.0",
+  "description": "Minimises, maximises or restores the foreground window.",
+  "intents": ["minimize_window", "maximize_window", "restore_window"],
+  "intent_params": {},
+  "sensitive": false,
+  "author": "core"
+}

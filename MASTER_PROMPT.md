@@ -1,6 +1,8 @@
 # AXON — Enterprise Master Prompt
 
-> The implemented next-phase execution specification is
+> The next-phase execution specification is
+> [`docs/MASTER_PROMPT_PHASE5.md`](docs/MASTER_PROMPT_PHASE5.md) — Agentic
+> Execution & Embodied Perception. The previous, now-implemented phase is
 > [`docs/MASTER_PROMPT_PHASE4.md`](docs/MASTER_PROMPT_PHASE4.md).
 
 > Feed this document to a principal-level engineering agent to evolve the

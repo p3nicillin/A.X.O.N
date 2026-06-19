@@ -1,0 +1,9 @@
+{
+  "name": "MediaControlSkill",
+  "version": "1.0.0",
+  "description": "Controls media playback (play/pause, next, previous) via the OS media keys.",
+  "intents": ["play_pause", "next_track", "previous_track"],
+  "intent_params": {},
+  "sensitive": false,
+  "author": "core"
+}

@@ -20,6 +20,13 @@ COMMAND_TYPES: dict[str, str] = {
     "add_note": "NOTES", "read_notes": "NOTES", "clear_notes": "NOTES",
     "list_files": "FILE_ACCESS", "find_file": "FILE_ACCESS",
     "open_folder": "FILE_ACCESS",
+    "play_pause": "MEDIA_CONTROL", "next_track": "MEDIA_CONTROL",
+    "previous_track": "MEDIA_CONTROL",
+    "volume_up": "VOLUME_CONTROL", "volume_down": "VOLUME_CONTROL",
+    "mute_toggle": "VOLUME_CONTROL",
+    "minimize_window": "WINDOW_CONTROL", "maximize_window": "WINDOW_CONTROL",
+    "restore_window": "WINDOW_CONTROL",
+    "read_clipboard": "CLIPBOARD", "set_clipboard": "CLIPBOARD",
 }
 
 

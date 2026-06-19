@@ -102,6 +102,42 @@ class LocalIntentEngine:
         if re.search(r"\bclear .*notes?\b", t):
             return packet("clear notes", "clear_notes", {}, "")
 
+        # --- clipboard (set captures from ORIGINAL text to preserve casing) ---
+        m = re.search(r"\b(?:copy|set clipboard to|put)\s+(.+?)\s+"
+                      r"(?:to|on|in)(?: the)? clipboard\b", text, re.IGNORECASE)
+        if m and m.group(1):
+            return packet("set clipboard", "set_clipboard",
+                          {"text": m.group(1).strip()}, "")
+        if re.search(r"\bclipboard\b", t) and re.search(
+                r"\b(read|show|what(?:'s| is)?|paste|whats)\b", t):
+            return packet("read clipboard", "read_clipboard", {}, "")
+
+        # --- media transport ---
+        if re.search(r"\b(next|skip)\b.*\b(track|song)\b", t) or \
+                re.search(r"\bnext track\b", t):
+            return packet("next track", "next_track", {}, "")
+        if re.search(r"\b(previous|last|go back)\b.*\b(track|song)\b", t) or \
+                re.search(r"\bprevious track\b", t):
+            return packet("previous track", "previous_track", {}, "")
+        if re.search(r"\b(play|pause|resume)\b", t):
+            return packet("toggle playback", "play_pause", {}, "")
+
+        # --- volume ---
+        if re.search(r"\b(mute|unmute)\b", t):
+            return packet("toggle mute", "mute_toggle", {}, "")
+        if re.search(r"\b(volume up|louder|raise (?:the )?volume|increase (?:the )?volume|turn (?:it |the volume )?up)\b", t):
+            return packet("volume up", "volume_up", {}, "")
+        if re.search(r"\b(volume down|quieter|softer|lower (?:the )?volume|decrease (?:the )?volume|turn (?:it |the volume )?down)\b", t):
+            return packet("volume down", "volume_down", {}, "")
+
+        # --- window state ---
+        if re.search(r"\bminimi[sz]e\b", t):
+            return packet("minimize window", "minimize_window", {}, "")
+        if re.search(r"\bmaximi[sz]e\b", t):
+            return packet("maximize window", "maximize_window", {}, "")
+        if re.search(r"\brestore (?:the )?window\b", t):
+            return packet("restore window", "restore_window", {}, "")
+
         # --- app launcher ---
         m = re.search(r"\b(open|launch|start|run)\s+(.+)", t)
         if m:
