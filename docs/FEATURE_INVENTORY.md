@@ -56,7 +56,7 @@ it is a first-install or machine-policy concern.
 | Deliverable | Status |
 |---|---|
 | C — Embodied control skills | **Done**: Media/Volume/Window/Clipboard skills shipped, manifest-driven, rules fast-path + LLM reachable, contract-tested |
-| A — Multi-step agentic execution | Designed in `docs/MASTER_PROMPT_PHASE5.md`; planner still single-step |
+| A — Multi-step agentic execution | **Done**: planner decomposes compound commands into a bounded multi-step plan; `Executor` runs steps through the skill engine with per-step critic gating, one correlation id, per-step confirmation pause/resume, and abort-on-failure |
 | B — Visual perception | Designed; needs a local vision model integration |
 | D — Speaker identity & scoped authz | Designed; needs a speaker-embedding model |
 | E — Streaming conversation & barge-in | Designed; needs token-streaming TTS handoff |

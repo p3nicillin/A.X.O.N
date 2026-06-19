@@ -18,12 +18,12 @@ import re
 import threading
 
 from ..ai.context import Context
-from ..ai.intent_engine import build_engine
+from ..ai.intent_engine import LocalIntentEngine, build_engine
 from ..ai.schema import Intent, IntentPacket, SkillResult
 from ..config import DATA_DIR, MEMORY_DIR, Config
 from ..memory import LocalEmbedder, MemoryGate, MemoryStore
 from ..perception.wake_word import WakeWord
-from ..reasoning import Critic, Planner
+from ..reasoning import Critic, Executor, Planner
 from ..skills.registry import SkillRegistry
 from ..user_model import UserModel
 from .event_bus import Event, EventBus
@@ -61,11 +61,24 @@ class Orchestrator:
             self.gate = MemoryGate(allow_secrets=config.memory_allow_secrets)
 
         # §5 planning + §7 critic: deliberate before executing.
-        self.planner: Planner | None = Planner() if config.planning_enabled else None
+        # The clause engine deterministically re-parses sub-clauses of a compound
+        # command so the planner can decompose it into a multi-step plan.
+        self._clause_engine = LocalIntentEngine(registry.catalogue())
+        decomposer = self._decompose_clause if config.agentic_enabled else None
+        self.planner: Planner | None = (
+            Planner(decomposer=decomposer, max_steps=config.agentic_max_steps)
+            if config.planning_enabled else None)
         self.critic: Critic | None = None
         if config.critic_enabled:
             known = {it for m in registry.catalogue() for it in m.intents}
             self.critic = Critic(known, min_confidence=config.critic_min_confidence)
+
+        # Phase 5 §A: multi-step agentic execution through the skill engine.
+        self.executor: Executor | None = None
+        if config.agentic_enabled and self.planner is not None:
+            self.executor = Executor(registry, self.critic, self.planner, bus,
+                                     self._command_log,
+                                     timeout=config.agentic_step_timeout)
 
         # §17 user model: a persistent inferred profile that biases replies.
         self.user_model: UserModel | None = None
@@ -213,14 +226,21 @@ class Orchestrator:
 
     # -- §11 immutable command log ------------------------------------------
     def _command_log(self, wake: bool, command_type: str, intent_type: str,
-                     skill_used: str, success: bool) -> None:
+                     skill_used: str, success: bool, correlation: str = "") -> None:
         self.bus.publish(Event.COMMAND_LOG, {
             "wake_detected": wake,
             "command_type": command_type,
             "intent": intent_type,
             "skill_used": skill_used,
             "success": success,
+            "correlation": correlation,
         })
+
+    def _needs_confirm(self, intent: Intent, skill) -> bool:
+        """§3 STEP5 gate: a sensitive skill or a destructive intent must be
+        confirmed by the user before it runs."""
+        return bool(self.config.confirm_sensitive and skill is not None and (
+            skill.manifest.sensitive or intent.type in _DESTRUCTIVE_INTENTS))
 
     # -- pipeline core (worker thread) ---------------------------------------
     def _process(self, text: str, wake: bool = True) -> None:
@@ -240,10 +260,7 @@ class Orchestrator:
 
             # §3 STEP3 classification (decided up front, then refined for gate)
             skill = self.registry.route(packet.intent) if packet.needs_skill else None
-            requires_confirmation = bool(
-                self.config.confirm_sensitive and skill is not None and (
-                    skill.manifest.sensitive
-                    or packet.intent.type in _DESTRUCTIVE_INTENTS))
+            requires_confirmation = self._needs_confirm(packet.intent, skill)
             self._log("debug",
                       f"classify: {packet.classification(requires_confirmation)}",
                       source="ai")
@@ -265,6 +282,14 @@ class Orchestrator:
                               error=True)
                 self._command_log(wake, packet.command_type, packet.intent.type,
                                   "none", False)
+                return
+
+            # Phase 5 §A: a compound command decomposes into a multi-step plan;
+            # the executor drives it (per-step critic + confirmation). Simple,
+            # single-step requests fall through to the original fast path.
+            if self.executor is not None and plan is not None \
+                    and len(plan.steps) > 1:
+                self._begin_plan(plan, text, wake)
                 return
 
             # §7 critic: the last gate before execution. A block hard-stops.
@@ -333,7 +358,23 @@ class Orchestrator:
         self._pending = None
         intent: Intent = pending["intent"]
         wake: bool = pending["wake"]
-        if _AFFIRMATIVE.search(text.lower()):
+        affirmative = bool(_AFFIRMATIVE.search(text.lower()))
+
+        # Multi-step plan paused on a sensitive step (Phase 5 §A).
+        run = pending.get("plan_run")
+        if run is not None:
+            if affirmative:
+                self._log("info", "confirmation: approved", source="you")
+                threading.Thread(target=self._continue_plan_after_confirm,
+                                 args=(run, intent, text), daemon=True).start()
+            else:
+                self._log("info", "confirmation: cancelled — plan aborted",
+                          source="you")
+                self.executor.log_blocked(intent, run)
+                self._finish_plan(run, aborted="cancelled")
+            return
+
+        if affirmative:
             self._log("info", "confirmation: approved", source="you")
             threading.Thread(target=self._execute,
                              args=(intent, pending.get("reply", ""), text, wake),
@@ -343,6 +384,80 @@ class Orchestrator:
             self._respond("Very good, sir. I'll leave it.")
             self._command_log(wake, intent.command_type, intent.type,
                               "none", False)
+
+    # -- Phase 5 §A: multi-step agentic execution ----------------------------
+    def _decompose_clause(self, text: str) -> Intent | None:
+        """Deterministically parse one clause of a compound command to a tool
+        intent (or None for a non-tool clause). Used by the planner only."""
+        packet = self._clause_engine.interpret(text, self.context)
+        return packet.intent if packet.needs_skill else None
+
+    def _begin_plan(self, plan, source_text: str, wake: bool) -> None:
+        run = self.executor.new_run(plan, source_text, wake)
+        self._log("info", f"agentic plan [{run.correlation}]: "
+                          f"{len(run.steps)} steps — {plan.summary()}",
+                  source="planner")
+        self._run_plan(run)
+
+    def _run_plan(self, run) -> None:
+        """Drive a plan step-by-step. Pauses (returns) when a step needs spoken
+        confirmation; resumes via :meth:`_resolve_confirmation`."""
+        while not run.done:
+            if self.executor.timed_out(run):
+                self._log("warn", f"plan [{run.correlation}] timed out",
+                          source="planner")
+                self._finish_plan(run, aborted="timeout")
+                return
+            intent = run.current
+            verdict, skill = self.executor.review(intent)
+            if skill is None or not verdict.approved:
+                self._log("warn", f"plan step {run.index + 1} blocked: "
+                                  f"{verdict.summary()}", source="critic")
+                self.executor.log_blocked(intent, run)
+                phrase = (self.critic.refusal_phrase(verdict) if self.critic
+                          else "I can't carry that step out safely, sir.")
+                self._respond(phrase, error=True)
+                return
+            if self._needs_confirm(intent, skill):
+                self._pending = {"plan_run": run, "intent": intent,
+                                 "skill": skill, "wake": run.wake}
+                self._respond(self._confirm_question(intent, skill))
+                return
+            result = self.executor.run_step(intent, run)
+            self._log("info" if result.ok else "warn",
+                      f"step {run.index + 1}/{len(run.steps)}: "
+                      f"{result.skill}: {result.summary}", source="skill")
+            run.advance(result)
+            if not result.ok:
+                self._finish_plan(run, aborted="step failed")
+                return
+        self._finish_plan(run)
+
+    def _continue_plan_after_confirm(self, run, intent: Intent, text: str) -> None:
+        """Execute the confirmed sensitive step, then resume the plan."""
+        result = self.executor.run_step(intent, run)
+        self._log("info" if result.ok else "warn",
+                  f"step {run.index + 1}/{len(run.steps)} (confirmed): "
+                  f"{result.skill}: {result.summary}", source="skill")
+        run.advance(result)
+        if not result.ok:
+            self._finish_plan(run, aborted="step failed")
+            return
+        self._run_plan(run)
+
+    def _finish_plan(self, run, aborted: str | None = None) -> None:
+        done, total = run.ok_count, len(run.steps)
+        if aborted:
+            spoken = (f"I completed {done} of {total} steps, sir, then stopped "
+                      f"({aborted}).")
+        elif run.results:
+            spoken = run.results[-1].speak or f"All {total} steps complete, sir."
+        else:
+            spoken = "There was nothing to do, sir."
+        self.context.add(run.source_text, spoken)
+        if not aborted:
+            self._consider_memory(run.source_text, "agentic_plan")
+        self._respond(spoken, error=bool(aborted))
 
     # -- §4 memory hooks -----------------------------------------------------
     def _recall_into_context(self, text: str) -> None:

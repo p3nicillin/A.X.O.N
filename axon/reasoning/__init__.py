@@ -10,7 +10,9 @@ Both layers are deterministic and never execute anything themselves.
 from __future__ import annotations
 
 from .critic import Critic
+from .executor import Executor, PlanRun
 from .planner import Planner
 from .schema import Plan, PlanStep, Verdict
 
-__all__ = ["Critic", "Planner", "Plan", "PlanStep", "Verdict"]
+__all__ = ["Critic", "Planner", "Executor", "PlanRun",
+           "Plan", "PlanStep", "Verdict"]

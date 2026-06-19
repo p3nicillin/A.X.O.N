@@ -142,6 +142,9 @@ class Config:
     planning_enabled: bool = True     # generate a structured plan before acting
     critic_enabled: bool = True       # safety/logic gate before execution
     critic_min_confidence: float = 0.0  # >0 flags low-confidence intents as risky
+    agentic_enabled: bool = True      # decompose compound commands into multi-step plans
+    agentic_max_steps: int = 5        # hard cap on steps in one plan
+    agentic_step_timeout: float = 15.0  # per-plan wall-clock budget (seconds)
 
     # --- User model (§17) ---
     user_model_enabled: bool = True   # infer a persistent profile to bias replies
