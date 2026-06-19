@@ -1,0 +1,13 @@
+{
+  "name": "NotesSkill",
+  "version": "1.0.0",
+  "description": "Stores, reads back and clears simple local notes.",
+  "intents": ["add_note", "read_notes", "clear_notes"],
+  "intent_params": {
+    "add_note": ["text"],
+    "read_notes": [],
+    "clear_notes": []
+  },
+  "sensitive": false,
+  "author": "core"
+}

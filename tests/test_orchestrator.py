@@ -1,10 +1,10 @@
 """Pipeline tests: destructive-action confirmation + §11 command logging."""
 import time
 
-from jarvis.config import Config
-from jarvis.core.event_bus import Event, EventBus
-from jarvis.core.orchestrator import Orchestrator
-from jarvis.skills.registry import SkillRegistry
+from axon.config import Config
+from axon.core.event_bus import Event, EventBus
+from axon.core.orchestrator import Orchestrator
+from axon.skills.registry import SkillRegistry
 
 
 class FakeTts:
@@ -20,6 +20,7 @@ class FakeTts:
 
 def build():
     cfg = Config()                 # require_wake_word False, confirm_sensitive True
+    cfg.ai.engine = "rules"        # keep unit tests hermetic when Ollama is installed
     bus = EventBus()
     logs = []
     bus.subscribe(Event.COMMAND_LOG, lambda m: logs.append(m.payload))

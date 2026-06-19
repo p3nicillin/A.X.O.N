@@ -1,8 +1,0 @@
-{
-  "name": "WebSearchSkill",
-  "version": "1.0.0",
-  "description": "Answers quick factual queries and opens web searches in the browser.",
-  "intents": ["web_search"],
-  "sensitive": false,
-  "author": "core"
-}

@@ -1,7 +1,7 @@
-# J.A.R.V.I.S
+# A.X.O.N
 
 A voice-driven, visually animated AI **operating layer** for Windows — not a
-chatbot. There is no chat window. You speak (or type a dev command), JARVIS
+chatbot. There is no chat window. You speak (or type a dev command), AXON
 interprets intent, routes it to a sandboxed **skill**, speaks the result, and a
 reactive holographic **core** animates the whole time.
 
@@ -22,12 +22,12 @@ independently testable.
 
 | Layer | Package | Responsibility |
 |-------|---------|----------------|
-| 👁️ Perception | `jarvis/perception` | mic capture, energy **VAD**, **STT** (Vosk), wake word |
-| 🧠 AI core | `jarvis/ai` | transcript → **structured intent JSON** (Claude *or* offline rules). Never acts. |
-| 🧩 Skill engine | `jarvis/skills` | plugin router + sandboxed skills (the only place actions happen) |
-| 🎙️ Audio | `jarvis/audio` | interruptible **TTS**, word-synced amplitude |
-| 🎨 Visual | `jarvis/visual` | the reactive holographic **JARVIS CORE** + HUD |
-| ⚙️ Core | `jarvis/core` | event bus, state machine, **orchestrator** (the pipeline) |
+| 👁️ Perception | `axon/perception` | mic capture, energy **VAD**, **STT** (Vosk), wake word |
+| 🧠 AI core | `axon/ai` | transcript → **structured intent JSON** via a pluggable backend chain (local LLM → optional cloud → rules). Never acts. |
+| 🧩 Skill engine | `axon/skills` | plugin router + sandboxed skills (the only place actions happen) |
+| 🎙️ Audio | `axon/audio` | interruptible **TTS**, word-synced amplitude |
+| 🎨 Visual | `axon/visual` | the reactive holographic **AXON CORE** + HUD |
+| ⚙️ Core | `axon/core` | event bus, state machine, **orchestrator** (the pipeline) |
 
 **Hard rule:** the AI core may only emit an `IntentPacket`. The orchestrator
 routes it to the skill engine. The AI never executes anything itself.
@@ -48,24 +48,26 @@ animates with nothing installed, then lights up capabilities as you add them.
 ## 2. Folder structure
 
 ```
-J.A.R.V.I.S/
+A.X.O.N/
 ├─ run.py / run.bat            # launchers
 ├─ requirements.txt
 ├─ config.example.toml         # copy to config.toml to customise
-├─ jarvis/
+├─ axon/
 │  ├─ main.py                  # wires every layer together
 │  ├─ config.py                # settings + paths
 │  ├─ core/
 │  │  ├─ event_bus.py          # thread-safe pub/sub
-│  │  ├─ states.py             # JarvisState (idle/listening/thinking/speaking/error)
+│  │  ├─ states.py             # AxonState (idle/listening/thinking/speaking/error)
 │  │  └─ orchestrator.py       # THE event pipeline + state machine
 │  ├─ perception/
 │  │  ├─ audio_input.py        # mic stream + energy VAD
 │  │  ├─ stt.py                # Vosk speech-to-text
-│  │  └─ wake_word.py          # "jarvis" gate
+│  │  └─ wake_word.py          # "AXON" gate
 │  ├─ ai/
 │  │  ├─ schema.py             # IntentPacket / Intent / SkillResult
-│  │  ├─ intent_engine.py      # Claude backend + offline rule backend
+│  │  ├─ intent_engine.py      # builds the backend chain + rule engine
+│  │  ├─ router.py             # selection, fallback chain, breaker, metrics
+│  │  ├─ backends/             # local LLM / cloud / rules backends + runtime
 │  │  └─ context.py            # rolling conversation memory
 │  ├─ skills/
 │  │  ├─ base.py               # Skill ABC + manifest
@@ -90,7 +92,7 @@ J.A.R.V.I.S/
 ## 3. Setup (Windows 10/11)
 
 ```powershell
-cd c:\Users\lukem\source\repos\J.A.R.V.I.S
+cd c:\Users\lukem\source\repos\A.X.O.N
 
 # (recommended) isolated environment
 python -m venv .venv
@@ -103,18 +105,30 @@ pip install -r requirements.txt
 Then run:
 
 ```powershell
-python run.py          # or: python -m jarvis   or double-click run.bat
+python run.py          # or: python -m axon   or double-click run.bat
 ```
 
 The window opens immediately. The console banner tells you which capabilities
 came online.
 
+### Migration note
+AXON replaces the former JARVIS package and product name. Use `python -m axon`
+instead of `python -m jarvis`, `axon/` instead of `jarvis/`, and `AXON_*`
+environment variables instead of `JARVIS_*`. A one-release compatibility shim
+still reads legacy `JARVIS_*` variables when the matching `AXON_*` variable is
+absent and prints a deprecation notice. Vendor keys such as
+`ANTHROPIC_API_KEY` are unchanged.
+
 ### Capability notes (install only what you want)
 * **Microphone + VAD** — `pip install sounddevice numpy`
 * **Speech-to-text** — `pip install vosk`, then a model (below)
 * **Text-to-speech** — `pip install pyttsx3 pywin32` (uses Windows SAPI5)
-* **Claude AI engine** — `pip install anthropic` and set a key (below). Without
-  it, the offline rule-based engine is used automatically.
+* **Local LLM core (default, free)** — install [Ollama](https://ollama.com) and
+  run `ollama pull llama3.2:3b`. No API key, nothing leaves the device.
+* **Cloud AI engine (optional)** — `pip install anthropic`, set `[ai] engine`
+  and `[ai.cloud] enabled = true`, and provide a key (below). Off by default.
+* **Secrets store (optional)** — `pip install keyring` to load the cloud key
+  from the Windows Credential Manager instead of an env var.
 * **System gauges** — `pip install psutil`
 * **Web search** — `pip install requests`
 
@@ -123,13 +137,49 @@ came online.
    `vosk-model-small-en-us-0.15` (~40 MB).
 2. Unzip it into `models/` so you have e.g.
    `models/vosk-model-small-en-us-0.15/`.
-3. JARVIS auto-detects it (or set `stt_model_path` in `config.toml`).
+3. AXON auto-detects it (or set `stt_model_path` in `config.toml`).
 
-### Enabling the Claude AI engine
-```powershell
-$env:ANTHROPIC_API_KEY = "sk-ant-..."     # or put it in config.toml
+### The AI core — free & local by default
+A.X.O.N parses intent with a **local LLM on your own machine**. The entire
+pipeline runs at **zero recurring cost with no API key**, and with the local
+core **no transcript or audio ever leaves the device** — the startup diagnostic
+states `AI core: LOCAL`. The core is a pluggable backend chain:
+
 ```
-Defaults to `claude-haiku-4-5-20251001` (fast, low latency for intent parsing).
+[rule fast-path] → local LLM → (optional cloud) → rules     # rules is the floor
+```
+
+* **`engine = "local"`** (default) — Ollama / llama.cpp / any OpenAI-compatible
+  local server (`[ai.local]` in config). Output is **schema-constrained**, then
+  validated → repaired → and, only if all else fails, it falls back to the
+  deterministic rule engine. Malformed model output never reaches a skill.
+* **`engine = "rules"`** — no LLM at all; pure deterministic parsing.
+* **`engine = "cloud"` / `auto`** — opt-in Claude. Enabling it is a privacy
+  change: every cloud-routed utterance is flagged in the audit trail.
+
+If no local runtime is found the app still launches and animates, prints a
+one-time setup guide, and runs on rules until you install one.
+
+**Choosing a local model (all open-weight, all free):**
+
+| Tier | Hardware | Suggested `[ai.local] model` |
+|------|----------|------------------------------|
+| Baseline (anywhere) | CPU-only / ≤4 GB | `llama3.2:3b`, `gemma3:2b` |
+| Recommended | ~8 GB VRAM | `qwen3:7b`, `mistral-small`, `llama3.1:8b` |
+| Strong reasoning | 12–16 GB VRAM | `phi-4` (14B) |
+| Enthusiast | 24 GB+ VRAM | a 30B-class model at Q4_K_M |
+
+Use **Q4_K_M** quantization (the common default) to halve VRAM with minimal
+quality loss. p95 perceived latency for local skills stays **< 2 s** on the
+reference machine; the rule fast-path answers simple commands instantly.
+
+### Enabling the optional cloud (Claude) engine
+```powershell
+$env:ANTHROPIC_API_KEY = "sk-ant-..."          # never store keys in config.toml
+$env:AXON_AI_CLOUD_ENABLED = "true"
+$env:AXON_AI_ENGINE = "cloud"                # or "auto" (cloud → local → rules)
+```
+The key is read only from the environment or your OS credential store.
 
 ---
 
@@ -155,7 +205,7 @@ Defaults to `claude-haiku-4-5-20251001` (fast, low latency for intent parsing).
 
 ## 5. Skills
 
-Each skill is a folder under `jarvis/skills/` with a `manifest.json` (name,
+Each skill is a folder under `axon/skills/` with a `manifest.json` (name,
 version, declared intents, `sensitive` flag) and a `handler.py` exposing a
 `SKILL` object implementing `can_handle()` / `execute()`.
 

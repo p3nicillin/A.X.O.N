@@ -1,7 +1,7 @@
-# JARVIS — Enterprise Master Prompt
+# AXON — Enterprise Master Prompt
 
 > Feed this document to a principal-level engineering agent to evolve the
-> JARVIS v1 prototype into a hardened, enterprise-grade, voice-driven AI
+> AXON v1 prototype into a hardened, enterprise-grade, voice-driven AI
 > operating layer for Windows. It assumes the existing modular architecture
 > (perception → AI core → skill engine → audio → visual, wired through a
 > thread-safe `EventBus`) and extends it. Preserve all existing safety rules
@@ -11,16 +11,16 @@
 
 ## 0. Mission
 
-Transform JARVIS from a single-user desktop prototype into an
+Transform AXON from a single-user desktop prototype into an
 **enterprise-deployable assistant platform**: secure, observable, governable,
 testable, updatable, and supportable at fleet scale — without sacrificing the
 sub-2-second perceived latency or the immersive holographic experience.
 
 The assistant must:
-* **Only activate on the wake word "Jarvis."** No audio is acted on, retained,
+* **Only activate on the wake word "AXON."** No audio is acted on, retained,
   or transcribed-for-action until the wake word is detected. This is both a UX
   and a privacy/compliance requirement.
-* Speak with a **British "JARVIS" voice** by default (configurable per user).
+* Speak with a **British "AXON" voice** by default (configurable per user).
 * Treat every action as **explicit, authorized, audited, and reversible where
   possible**.
 
@@ -43,7 +43,7 @@ The assistant must:
 
 ## 2. Wake-word activation (hard requirement)
 
-* Implement an **always-on, low-power wake-word spotter** ("Jarvis") that runs
+* Implement an **always-on, low-power wake-word spotter** ("AXON") that runs
   before VAD/STT. Recommended: **openWakeWord** (Apache-2.0, no cloud) or
   **Porcupine** (commercial license). The current post-STT keyword gate is the
   fallback only.
@@ -185,7 +185,7 @@ The assistant must:
 
 ## 12. Acceptance criteria
 
-* JARVIS ignores all speech until "Jarvis" is spoken, then acknowledges in a
+* AXON ignores all speech until "AXON" is spoken, then acknowledges in a
   British voice and acts only on the following command.
 * Every action produces an immutable audit record with user + correlation id.
 * No secret is ever stored in plaintext.

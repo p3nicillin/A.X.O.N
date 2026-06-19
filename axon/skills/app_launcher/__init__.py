@@ -1,0 +1,1 @@
+"""App launcher skill package."""

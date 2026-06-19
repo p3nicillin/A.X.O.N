@@ -1,8 +1,0 @@
-{
-  "name": "AppLauncherSkill",
-  "version": "1.0.0",
-  "description": "Launches a whitelisted set of desktop applications.",
-  "intents": ["open_app", "close_app"],
-  "sensitive": false,
-  "author": "core"
-}

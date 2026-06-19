@@ -1,8 +1,0 @@
-{
-  "name": "FileSystemSkill",
-  "version": "1.0.0",
-  "description": "Restricted, sandboxed file operations inside a single workspace folder.",
-  "intents": ["list_files", "find_file", "open_folder"],
-  "sensitive": true,
-  "author": "core"
-}

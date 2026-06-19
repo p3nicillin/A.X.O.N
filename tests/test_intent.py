@@ -1,8 +1,8 @@
 """Tests for the offline intent engine and the AI->intent contract."""
-from jarvis.ai.context import Context
-from jarvis.ai.intent_engine import LocalIntentEngine
-from jarvis.ai.schema import IntentPacket, command_type_for
-from jarvis.skills.registry import SkillRegistry
+from axon.ai.context import Context
+from axon.ai.intent_engine import LocalIntentEngine
+from axon.ai.schema import IntentPacket, command_type_for
+from axon.skills.registry import SkillRegistry
 
 
 def engine():
@@ -37,7 +37,7 @@ def test_search_strips_filler():
 
 
 def test_chat_fallback_is_not_a_skill():
-    p = parse("hello jarvis")
+    p = parse("hello AXON")
     assert p.intent.type == "chat"
     assert p.needs_skill is False
 

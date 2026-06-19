@@ -1,14 +1,33 @@
 # Copy to "config.toml" and edit. Every setting is optional; environment
-# variables (JARVIS_<NAME>, and ANTHROPIC_API_KEY) override these.
+# variables (AXON_<NAME>, and ANTHROPIC_API_KEY) override these.
 
-# --- AI intent engine -------------------------------------------------------
-# Leave the key empty to use the built-in offline rule-based engine.
-# Set it (or the ANTHROPIC_API_KEY env var) to use Claude for richer intent.
-anthropic_api_key = ""
-ai_model = "claude-haiku-4-5-20251001"   # fast = low latency
+# --- AI core ---------------------------------------------------------------
+# A.X.O.N is FREE and LOCAL by default: intent parsing runs on a local LLM on
+# your own machine, so no API key is required and no transcript leaves the
+# device. The cloud (Claude) backend is OPTIONAL and OFF by default.
+[ai]
+engine = "local"             # auto | local | cloud | rules
+fallback = ["local", "rules"]   # tried in order; rules is the guaranteed bottom
+hybrid_fastpath = true       # match simple commands with rules, skip the LLM
+warm_on_start = true         # preload the model at boot for a fast first command
+
+[ai.local]
+runtime = "ollama"           # ollama | llamacpp | openai_compatible
+endpoint = "http://localhost:11434"
+model = "llama3.2:3b"        # baseline 3B runs on almost anything; see README tiers
+temperature = 0.1
+keep_alive = "30m"
+timeout_ms = 10000
+
+[ai.cloud]
+enabled = false              # opt-in only; a material privacy change when true
+model = "claude-haiku-4-5-20251001"
+# The API key is NEVER stored here. Set the ANTHROPIC_API_KEY environment
+# variable, or store it in your OS credential manager (service "AXON",
+# username "anthropic_api_key") via the optional `keyring` package.
 
 # --- Speech to text ---------------------------------------------------------
-# Path to an unpacked Vosk model. If empty, JARVIS auto-detects any model
+# Path to an unpacked Vosk model. If empty, AXON auto-detects any model
 # folder under ./models/ . See README "Speech-to-text setup".
 stt_model_path = ""
 
@@ -17,8 +36,8 @@ vad_start_rms = 0.012    # raise if it triggers on background noise
 vad_silence_ms = 800     # trailing silence that ends an utterance
 
 # --- Wake word --------------------------------------------------------------
-wake_word = "jarvis"
-require_wake_word = false # true = ignore speech until "jarvis" is heard
+wake_word = "Axon"
+require_wake_word = false # true = ignore speech until "Axon" is heard
 
 # --- Text to speech ---------------------------------------------------------
 tts_rate = 185           # words per minute

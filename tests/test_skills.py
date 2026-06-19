@@ -1,6 +1,6 @@
 """Contract + behaviour tests for the skill engine."""
-from jarvis.ai.schema import Intent
-from jarvis.skills.registry import SkillRegistry
+from axon.ai.schema import Intent
+from axon.skills.registry import SkillRegistry
 
 
 def reg():

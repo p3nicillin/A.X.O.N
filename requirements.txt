@@ -1,10 +1,13 @@
 # ---------------------------------------------------------------------------
-# JARVIS dependencies
+# AXON dependencies
 #
 # NOTHING here is strictly required to LAUNCH the app (the visual core runs on
 # Python's bundled tkinter). Each capability degrades gracefully if its
 # package is missing. Install what you want, in order of value:
 # ---------------------------------------------------------------------------
+
+# --- Primary AXON UI (falls back to Tkinter when absent) ---
+pywebview>=5.0
 
 # --- Audio capture (microphone stream + energy VAD) ---
 sounddevice>=0.4.6
@@ -18,9 +21,15 @@ vosk>=0.3.45
 pyttsx3>=2.90
 pywin32>=306 ; sys_platform == "win32"
 
-# --- AI intent engine (cloud). Optional: a local rule-based parser is used
-#     automatically when no ANTHROPIC_API_KEY is set. ---
+# --- AI core ---
+# The DEFAULT core is a local LLM and needs NO Python package here — only a
+# local runtime (e.g. Ollama: https://ollama.com, then `ollama pull llama3.2:3b`),
+# talked to over plain HTTP via the standard library. Nothing to pip-install.
+#
+# Optional cloud (Claude) backend — OFF by default:
 anthropic>=0.40
+# Optional: load the cloud key from the OS credential store instead of env:
+keyring>=24
 
 # --- Skills ---
 psutil>=5.9          # SystemInfoSkill

@@ -1,8 +1,0 @@
-{
-  "name": "SystemInfoSkill",
-  "version": "1.0.0",
-  "description": "Reports CPU, memory, disk and battery status.",
-  "intents": ["system_info"],
-  "sensitive": false,
-  "author": "core"
-}

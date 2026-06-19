@@ -1,0 +1,13 @@
+{
+  "name": "FileSystemSkill",
+  "version": "1.0.0",
+  "description": "Restricted, sandboxed file operations inside a single workspace folder.",
+  "intents": ["list_files", "find_file", "open_folder"],
+  "intent_params": {
+    "list_files": ["path"],
+    "find_file": ["query"],
+    "open_folder": ["path"]
+  },
+  "sensitive": true,
+  "author": "core"
+}
