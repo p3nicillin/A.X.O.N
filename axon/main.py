@@ -92,7 +92,7 @@ def banner(config: Config, registry: SkillRegistry, stt: SttEngine,
     print(f"  speech-to-text: {stt_status}")
     print(f"  wake spotter  : {'on (grammar-biased)' if config.use_wake_spotter else 'off'}")
     print(f"  text-to-speech: {'ready' if tts.available else 'simulated'} "
-          f"(voice: {config.tts_voice or 'system default'})")
+          f"({tts.backend_name}, voice: {tts.selected_voice})")
     print(f"  wake word     : {'REQUIRED — say “AXON …”' if config.require_wake_word else 'off'}")
     renderer = {"web": "AXON web UI (pywebview)",
                 "qt": "PySide6 + GLSL bloom",

@@ -340,8 +340,8 @@ class Bridge:
                 "commands": list(self._commands)[-80:],
             },
             "voice": {
-                "tts_backend": "SAPI5" if bool(getattr(self.orch.tts, "available", False)) else "unavailable",
-                "voice": self.config.tts_voice or "system default",
+                "tts_backend": getattr(self.orch.tts, "backend_name", "unavailable"),
+                "voice": getattr(self.orch.tts, "selected_voice", self.config.tts_voice or "system default"),
                 "rate": self.config.tts_rate,
                 "stt": "online" if bool(getattr(getattr(self.orch.audio_input, "stt", None), "available", False)) else "offline",
                 "stt_model": Path(getattr(getattr(self.orch.audio_input, "stt", None), "_cmd_path", "") or "").name or "none",

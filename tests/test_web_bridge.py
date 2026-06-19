@@ -41,7 +41,8 @@ def build_bridge():
     orch = SimpleNamespace(
         ai=FakeAi(), registry=SkillRegistry().discover(),
         memory=SimpleNamespace(all_entries=lambda: [FakeEntry()]),
-        audio_input=audio, tts=SimpleNamespace(available=True),
+        audio_input=audio, tts=SimpleNamespace(
+            available=True, backend_name="SAPI5", selected_voice="Test Voice"),
         state=AxonState.IDLE, audit_session_id="live-session",
         autonomy=None,
     )
@@ -61,6 +62,7 @@ def test_panel_snapshot_uses_live_project_objects():
     assert any(agent["name"] == "Speech recognition" and
                agent["status"] == "active" for agent in data["agents"])
     assert data["voice"]["tts_backend"] == "SAPI5"
+    assert data["voice"]["voice"] == "Test Voice"
     assert data["voice"]["stt_model"] == "live-model"
 
 
