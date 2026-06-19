@@ -37,9 +37,15 @@ def test_time_and_date_execute():
     assert r.execute(Intent(type="get_date")).ok
 
 
-def test_app_launcher_rejects_non_whitelisted():
-    res = reg().execute(Intent(type="open_app", parameters={"app": "evil.exe"}))
+def test_app_launcher_rejects_empty_name():
+    res = reg().execute(Intent(type="open_app", parameters={"app": "   "}))
     assert res.ok is False
+
+
+def test_app_launcher_opens_non_aliased_app():
+    # Whitelist removed: any named app passes through to the OS launcher.
+    res = reg().execute(Intent(type="open_app", parameters={"app": "explorer"}))
+    assert res.ok is True
 
 
 def test_filesystem_is_sandboxed():

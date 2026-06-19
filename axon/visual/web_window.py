@@ -368,7 +368,7 @@ class Bridge:
             m = skill.manifest
             settings = {}
             if m.name == "AppLauncherSkill":
-                settings["whitelist"] = sorted(set(app_launcher.ALIASES))
+                settings["shortcuts"] = sorted(set(app_launcher.ALIASES))
             elif m.name == "FileSystemSkill":
                 settings["sandbox_root"] = str(file_system.WORKSPACE)
             skills.append({

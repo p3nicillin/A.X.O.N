@@ -1,9 +1,8 @@
-"""AppLauncherSkill — open/close a *whitelisted* set of apps.
+"""AppLauncherSkill — open/close desktop apps.
 
-Safety: this skill never executes an arbitrary path from the AI. The intent
-carries a friendly name which must resolve through ``ALIASES``. Anything not on
-the list is refused. This keeps voice control from becoming arbitrary code
-execution.
+``ALIASES`` are friendly-name shortcuts (e.g. "files" -> explorer). Names not in
+the map fall through to the OS launcher unchanged, so any app on PATH / App Paths
+can be opened by name. Only an empty name is refused.
 """
 from __future__ import annotations
 
@@ -59,13 +58,8 @@ class AppLauncherSkill(Skill):
         return self._open(name)
 
     def _open(self, name: str) -> SkillResult:
-        target = ALIASES.get(name)
-        if target is None:
-            return self.fail(
-                f"'{name}' is not authorised.",
-                speak="That application is not authorised, sir.",
-                allowed=sorted(set(ALIASES)),
-            )
+        # Known alias -> mapped target; otherwise launch the spoken name as-is.
+        target = ALIASES.get(name, name)
         try:
             if target.endswith(":"):  # ms-settings: style URI
                 os.startfile(target)  # type: ignore[attr-defined]
@@ -80,10 +74,10 @@ class AppLauncherSkill(Skill):
                              speak="I couldn't open that, sir.")
 
     def _close(self, name: str) -> SkillResult:
+        # Known target image, else derive one from the spoken name.
         image = CLOSE_TARGETS.get(name)
         if image is None:
-            return self.fail(f"'{name}' is not authorised.",
-                             speak="That application is not authorised, sir.")
+            image = name if name.lower().endswith(".exe") else f"{name}.exe"
         if shutil.which("taskkill") is None:
             return self.fail("taskkill is unavailable on this system.",
                              speak="I couldn't close that, sir.")

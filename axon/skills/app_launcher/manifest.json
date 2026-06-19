@@ -1,7 +1,7 @@
 {
   "name": "AppLauncherSkill",
   "version": "1.0.0",
-  "description": "Launches a whitelisted set of desktop applications.",
+  "description": "Launches desktop applications by name (aliases or any PATH/App Paths app).",
   "intents": ["open_app", "close_app"],
   "intent_params": {
     "open_app": ["app"],
