@@ -1,0 +1,3 @@
+# Developer / CI tooling (not needed to run JARVIS)
+-r requirements.txt
+pytest>=8.0

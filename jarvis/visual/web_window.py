@@ -1,0 +1,322 @@
+"""The AXON web frontend: an HTML/CSS/JS interface hosted in a native WebView2
+window via pywebview, wired to the same EventBus + Orchestrator as the other
+frontends.
+
+Architecture mirrors the Qt/Tk windows so it's a drop-in backend:
+
+    JS  -> Python   the page calls window.pywebview.api.{command,
+                    toggle_listening, on_ready}; those are methods of :class:`Bridge`.
+    Python -> JS    bus events are translated into window.AXON.* calls
+                    (reply / thinking / setListening / setTelemetry / addMemory …)
+                    via window.evaluate_js.
+
+Bus events arrive on worker threads. ``evaluate_js`` is safe to call from any
+thread (pywebview marshals it to the UI thread); high-frequency amplitude
+updates are throttled so we don't flood the bridge.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import threading
+import time
+from pathlib import Path
+
+import webview
+
+from ..core.event_bus import Event, EventBus
+from ..core.states import JarvisState
+from ..skills.system_info import handler as sysinfo
+
+_UI_FILE = Path(__file__).resolve().parent / "web" / "axon_ui.html"
+
+# pywebview's edgechromium backend logs noisy (non-fatal) errors while trying to
+# introspect WebView2 native properties off the UI thread. Mute them.
+logging.getLogger("pywebview").setLevel(logging.CRITICAL)
+
+# JarvisState -> (AXON status text, voice-chip text, is-listening)
+_STATUS = {
+    JarvisState.IDLE:      ("ONLINE", "IDLE", False),
+    JarvisState.LISTENING: ("LISTENING", "LIVE", True),
+    JarvisState.THINKING:  ("PROCESSING", "BUSY", False),
+    JarvisState.SPEAKING:  ("SPEAKING", "VOICE", False),
+    JarvisState.ERROR:     ("ALERT", "ERR", False),
+}
+
+
+class Bridge:
+    """pywebview js_api object + the Python->UI control surface."""
+
+    def __init__(self, config, bus: EventBus, orchestrator) -> None:
+        self.config = config
+        self.bus = bus
+        self.orch = orchestrator
+        self.window = None
+        self._listening = False
+        self._last_amp = 0.0
+        self._amp_at = 0.0
+        # net counters for throughput readout
+        self._net = None
+        # the page signals readiness via on_ready(); until then evaluate_js is
+        # premature (DOM not built) and WebView2 spams off-thread COM errors.
+        self.ready = threading.Event()
+
+    # ====================  JS -> Python  ====================
+    def on_ready(self) -> bool:
+        """Fired once the page's boot sequence completes."""
+        self.ready.set()
+        self.set_agents(self._agents())
+        self.set_greeting("All systems nominal. How may I help, sir?")
+        return True
+
+    def command(self, text: str) -> bool:
+        """A typed command from the AXON input box. Bypasses the wake word
+        (the same contract as the Qt/Tk dev inputs)."""
+        text = (text or "").strip()
+        if text:
+            self.orch.submit_text(text, bypass_wake=True)
+        return True
+
+    def toggle_listening(self) -> bool:
+        """Mic button: enable/disable live capture and reflect it in the UI."""
+        self._listening = not self._listening
+        audio = getattr(self.orch, "audio_input", None)
+        if audio is not None:
+            try:
+                audio.set_enabled(self._listening)
+            except Exception:
+                pass
+        self.set_listening(self._listening)
+        return self._listening
+
+    # ====================  Python -> JS  ====================
+    def js(self, code: str) -> None:
+        # hold every Python->JS call until the page has booted (on_ready),
+        # otherwise evaluate_js runs against an unbuilt DOM and WebView2 errors.
+        if self.window is None or not self.ready.is_set():
+            return
+        try:
+            self.window.evaluate_js(code)
+        except Exception:
+            pass  # window may be mid-teardown
+
+    def reply(self, text: str) -> None:
+        self.js(f"window.AXON.reply({json.dumps(text)})")
+
+    def user_said(self, text: str) -> None:
+        self.js(f"window.AXON.addMessage('You', {json.dumps(text)}, 'me')")
+
+    def thinking(self) -> None:
+        self.js("window.AXON.thinking()")
+
+    def stop_thinking(self) -> None:
+        self.js("window.AXON.stopThinking()")
+
+    def push_thought(self, text: str) -> None:
+        self.js(f"window.AXON.pushThought({json.dumps(text)})")
+
+    def add_memory(self, text: str) -> None:
+        self.js(f"window.AXON.addMemory({json.dumps(text)})")
+
+    def set_agents(self, agents: list[dict]) -> None:
+        self.js(f"window.AXON.setAgents({json.dumps(agents)})")
+
+    def set_listening(self, on: bool) -> None:
+        self.js(f"window.AXON.setListening({json.dumps(bool(on))})")
+
+    def set_amplitude(self, level: float) -> None:
+        self.js(f"window.AXON.setAmplitude({float(level):.3f})")
+
+    def set_status(self, text: str) -> None:
+        self.js(f"window.AXON.setStatus({json.dumps(text)})")
+
+    def set_voice_chip(self, text: str) -> None:
+        self.js(f"window.AXON.setVoiceChip({json.dumps(text)})")
+
+    def set_greeting(self, text: str) -> None:
+        self.js(f"window.AXON.setGreeting({json.dumps(text)})")
+
+    def set_telemetry(self, data: dict) -> None:
+        self.js(f"window.AXON.setTelemetry({json.dumps(data)})")
+
+    # ====================  bus -> UI bridge  ====================
+    def on_event(self, msg) -> None:
+        ev = msg.event
+        if ev == Event.STATE_CHANGED:
+            self._on_state(msg.payload)
+        elif ev == Event.TRANSCRIPT:
+            self._on_transcript(msg.payload or {})
+        elif ev == Event.SPEAK_START:
+            text = (msg.payload or {}).get("text", "")
+            if text:
+                self.reply(text)
+        elif ev in (Event.SPEAK_LEVEL, Event.AUDIO_LEVEL):
+            self._on_amplitude(float(msg.payload or 0.0))
+        elif ev == Event.INTENT:
+            self._on_intent(msg.payload)
+        elif ev == Event.SUGGESTION:
+            self._on_suggestion(msg.payload or {})
+        elif ev == Event.LOG:
+            self._on_log(msg.payload or {})
+
+    def _on_state(self, state: JarvisState) -> None:
+        status, voice, listening = _STATUS.get(
+            state, ("ONLINE", "IDLE", False))
+        self.set_status(status)
+        self.set_voice_chip(voice)
+        self.set_listening(listening)
+        if state == JarvisState.THINKING:
+            self.thinking()
+        elif state in (JarvisState.IDLE, JarvisState.ERROR):
+            self.stop_thinking()
+
+    def _on_transcript(self, payload: dict) -> None:
+        # show the user's spoken command (typed commands echo themselves in JS)
+        text = payload.get("text", "").strip()
+        if text and payload.get("wake_satisfied") and not payload.get("wake_only"):
+            self.user_said(text)
+
+    def _on_amplitude(self, level: float) -> None:
+        # throttle to ~25 Hz; evaluate_js per audio frame would saturate the bridge
+        now = time.monotonic()
+        if now - self._amp_at < 0.04 and abs(level - self._last_amp) < 0.05:
+            return
+        self._amp_at = now
+        self._last_amp = level
+        self.set_amplitude(level)
+
+    def _on_intent(self, packet) -> None:
+        thought = getattr(packet, "thought", "")
+        if thought:
+            self.push_thought(thought)
+
+    def _on_suggestion(self, payload: dict) -> None:
+        # §16.3 proactive advice — shown as an AXON message, never auto-executed.
+        text = payload.get("text", "")
+        if text:
+            self.js(f"window.AXON.addMessage('AXON', {json.dumps('💡 ' + text)}, 'ai')")
+
+    def _on_log(self, payload: dict) -> None:
+        # surface durable memories written by the orchestrator (§4) in the
+        # AXON memory drawer: messages look like "remembered [preference] …".
+        if payload.get("source") == "memory":
+            message = payload.get("message", "")
+            if message.startswith("remembered"):
+                # strip the "remembered [type] " prefix for a clean card
+                content = message.split("] ", 1)[-1] if "] " in message else message
+                self.add_memory(content)
+
+    # ====================  telemetry  ====================
+    def _agents(self) -> list[dict]:
+        audio = getattr(self.orch, "audio_input", None)
+        mic_on = bool(getattr(audio, "available", False))
+        mem_on = getattr(self.orch, "memory", None) is not None
+        n_skills = len(self.orch.registry.catalogue())
+        return [
+            {"name": "Speech I/O", "status": "active" if mic_on else "idle"},
+            {"name": "Memory store", "status": "active" if mem_on else "idle"},
+            {"name": "Intent engine", "status": "active"},
+            {"name": f"Skills ({n_skills})", "status": "active"},
+            {"name": "Audit trail", "status": "active"},
+        ]
+
+    def snapshot(self) -> dict:
+        """Map the project's read-only metrics onto AXON's telemetry fields."""
+        m = sysinfo.read_metrics()
+        cpu = m.get("cpu") or 0.0
+        mem = m.get("memory") or 0.0
+        disk = m.get("disk") or 0.0
+        up = down = 0.0
+        try:
+            import psutil
+            now = psutil.net_io_counters()
+            t = time.time()
+            if self._net is not None:
+                dt = max(0.001, t - self._net[2])
+                up = max(0.0, (now.bytes_sent - self._net[0]) * 8 / 1e6 / dt)
+                down = max(0.0, (now.bytes_recv - self._net[1]) * 8 / 1e6 / dt)
+            self._net = (now.bytes_sent, now.bytes_recv, t)
+        except Exception:
+            pass
+        return {
+            "cpu": cpu, "mem": mem,
+            "gpu": disk,                     # repurpose the GPU gauge for disk
+            "tmp": 42.0 + cpu * 0.28,        # derived thermal proxy
+            "up": up, "down": down,
+            "latency": 8 + cpu * 0.2,
+        }
+
+    def telemetry_loop(self, stop: threading.Event) -> None:
+        self.ready.wait(timeout=15)       # don't push telemetry before the DOM
+        while not stop.is_set():
+            self.set_telemetry(self.snapshot())
+            stop.wait(1.3)
+
+
+class _Api:
+    """The object pywebview exposes to JS as ``window.pywebview.api``.
+
+    Deliberately minimal: it holds only the three inbound methods the page
+    calls. The controller is stored under an underscore name so pywebview does
+    NOT try to serialise it — exposing the window/orchestrator/bus here makes
+    pywebview recurse into the .NET WebView2 object graph and spam errors.
+    """
+
+    def __init__(self, bridge: "Bridge") -> None:
+        self._bridge = bridge
+
+    def on_ready(self) -> bool:
+        return self._bridge.on_ready()
+
+    def command(self, text: str) -> bool:
+        return self._bridge.command(text)
+
+    def toggle_listening(self) -> bool:
+        return self._bridge.toggle_listening()
+
+
+class JarvisWebWindow:
+    """Public surface mirrors JarvisQtWindow/JarvisWindow: construct, set_on_close,
+    then run (blocking) with a boot callback."""
+
+    def __init__(self, config, bus: EventBus, orchestrator) -> None:
+        self.config = config
+        self.bus = bus
+        self.orch = orchestrator
+        self.bridge = Bridge(config, bus, orchestrator)
+        self._api = _Api(self.bridge)
+        self._on_close_cb = None
+        self._boot = None
+        self._stop = threading.Event()
+        bus.subscribe_all(self.bridge.on_event)
+
+    def set_on_close(self, cb) -> None:
+        self._on_close_cb = cb
+
+    def run(self, boot_subsystems=None) -> None:
+        """Create the window and enter the (blocking) GUI loop."""
+        self._boot = boot_subsystems
+        self.bridge.window = webview.create_window(
+            "J.A.R.V.I.S — AXON",
+            url=str(_UI_FILE),
+            js_api=self._api,
+            width=self.config.window_width + 220,
+            height=self.config.window_height + 100,
+            min_size=(960, 620),
+            background_color="#04030b",
+        )
+        self.bridge.window.events.closed += self._on_closed
+        # webview.start runs `func` on a worker thread once the GUI is up, so
+        # the window exists before we boot the (event-publishing) subsystems.
+        webview.start(self._after_start, debug=False)
+
+    def _after_start(self) -> None:
+        threading.Thread(target=self.bridge.telemetry_loop, args=(self._stop,),
+                         daemon=True).start()
+        if self._boot is not None:
+            self._boot()
+
+    def _on_closed(self) -> None:
+        self._stop.set()
+        if self._on_close_cb:
+            self._on_close_cb()

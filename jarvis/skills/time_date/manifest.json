@@ -1,0 +1,8 @@
+{
+  "name": "TimeDateSkill",
+  "version": "1.0.0",
+  "description": "Reports the current time and date.",
+  "intents": ["get_time", "get_date"],
+  "sensitive": false,
+  "author": "core"
+}

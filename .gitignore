@@ -1,0 +1,8 @@
+# runtime data & secrets
+config.toml
+data/
+models/
+# python
+__pycache__/
+*.pyc
+.venv/

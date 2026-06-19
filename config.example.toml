@@ -1,0 +1,33 @@
+# Copy to "config.toml" and edit. Every setting is optional; environment
+# variables (JARVIS_<NAME>, and ANTHROPIC_API_KEY) override these.
+
+# --- AI intent engine -------------------------------------------------------
+# Leave the key empty to use the built-in offline rule-based engine.
+# Set it (or the ANTHROPIC_API_KEY env var) to use Claude for richer intent.
+anthropic_api_key = ""
+ai_model = "claude-haiku-4-5-20251001"   # fast = low latency
+
+# --- Speech to text ---------------------------------------------------------
+# Path to an unpacked Vosk model. If empty, JARVIS auto-detects any model
+# folder under ./models/ . See README "Speech-to-text setup".
+stt_model_path = ""
+
+# --- Voice activity detection ----------------------------------------------
+vad_start_rms = 0.012    # raise if it triggers on background noise
+vad_silence_ms = 800     # trailing silence that ends an utterance
+
+# --- Wake word --------------------------------------------------------------
+wake_word = "jarvis"
+require_wake_word = false # true = ignore speech until "jarvis" is heard
+
+# --- Text to speech ---------------------------------------------------------
+tts_rate = 185           # words per minute
+tts_voice = ""           # substring of a SAPI voice name, e.g. "Zira"
+
+# --- Visual -----------------------------------------------------------------
+window_width = 1100
+window_height = 720
+target_fps = 60
+
+# --- Safety -----------------------------------------------------------------
+confirm_sensitive = true # require spoken confirmation for sensitive skills
