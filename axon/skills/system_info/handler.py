@@ -20,7 +20,10 @@ def read_metrics() -> dict[str, float | None]:
     except Exception:
         bat = None
     return {
-        "cpu": psutil.cpu_percent(interval=None),
+        # interval=None returns a meaningless 0.0 on the first call made from
+        # each worker thread. Take a short real sample so spoken reports and
+        # the HUD agree with Task Manager.
+        "cpu": psutil.cpu_percent(interval=0.1),
         "memory": psutil.virtual_memory().percent,
         "disk": psutil.disk_usage("/").percent,
         "battery": bat,
@@ -32,7 +35,7 @@ class SystemInfoSkill(Skill):
         if psutil is None:
             return self.fail("System telemetry requires the 'psutil' package.")
         m = read_metrics()
-        parts = [f"CPU at {m['cpu']:.0f} percent",
+        parts = [f"CPU at {m['cpu']:.1f} percent",
                  f"memory at {m['memory']:.0f} percent",
                  f"disk at {m['disk']:.0f} percent"]
         if m["battery"] is not None:
@@ -43,7 +46,7 @@ class SystemInfoSkill(Skill):
         verdict = "Systems are under load, sir." if strained else \
                   "All systems are stable, sir."
         spoken = ", ".join(parts) + ". " + verdict
-        summary = (f"CPU {m['cpu']:.0f}% | MEM {m['memory']:.0f}% | "
+        summary = (f"CPU {m['cpu']:.1f}% | MEM {m['memory']:.0f}% | "
                    f"DISK {m['disk']:.0f}% | listener active")
         return self.ok(summary, speak=spoken, **m)
 

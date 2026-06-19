@@ -27,6 +27,9 @@ class WakeWord:
         self.word = config.wake_word.lower()
         self.aliases = {a.lower() for a in getattr(config, "wake_aliases", [])}
         self.threshold = float(getattr(config, "wake_fuzzy_threshold", 0.72))
+        # Observed tail left when the spotter activates before the old wake
+        # word has fully cleared the command recogniser.
+        self.residues = {"his"}
 
     @staticmethod
     def _norm(token: str) -> str:
@@ -57,3 +60,16 @@ class WakeWord:
             if self._is_wake(tokens[i]):
                 return True, " ".join(tokens[i + 1:]).strip()
         return False, text
+
+    def clean_spotter_command(self, text: str) -> str:
+        """Remove wake-word audio captured at the start of a pre-gated command.
+
+        This is only for transcripts emitted after the dedicated wake spotter
+        has already fired. It must not be applied to typed commands.
+        """
+        tokens = text.split()
+        for i in range(min(2, len(tokens))):
+            token = self._norm(tokens[i])
+            if self._is_wake(token) or token in self.residues:
+                return " ".join(tokens[i + 1:]).strip()
+        return text.strip()

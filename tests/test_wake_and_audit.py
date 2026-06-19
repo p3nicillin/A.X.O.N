@@ -49,6 +49,15 @@ def test_wake_word_fuzzy_rejects_unrelated_words():
     assert heard is False
 
 
+def test_spotter_cleanup_removes_wake_alias_and_recorded_residue():
+    cfg = Config(); cfg.require_wake_word = True
+    w = WakeWord(cfg)
+
+    assert w.clean_spotter_command("action status report") == "status report"
+    assert w.clean_spotter_command("his status report") == "status report"
+    assert w.clean_spotter_command("status report") == "status report"
+
+
 def test_audit_chain_is_tamper_evident(tmp_path, monkeypatch):
     monkeypatch.setattr(audit_module, "LOG_DIR", tmp_path)
     cfg = Config(); cfg.audit_enabled = True

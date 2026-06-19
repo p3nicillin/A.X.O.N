@@ -123,7 +123,7 @@ class Orchestrator:
                     self._respond(self.config.wake_ack_phrase)
                 return
             if text:
-                self.submit_text(text, bypass_wake=True)
+                self.submit_text(text, bypass_wake=True, wake_satisfied=True)
             return
 
         # legacy path: apply the post-STT wake-word check
@@ -133,7 +133,8 @@ class Orchestrator:
     # -- public entry --------------------------------------------------------
     # Voice goes through the wake-word gate; the typed DEV INPUT bypasses it so
     # the system stays testable without saying "AXON" every time.
-    def submit_text(self, text: str, bypass_wake: bool = True) -> None:
+    def submit_text(self, text: str, bypass_wake: bool = True,
+                    wake_satisfied: bool = False) -> None:
         text = text.strip()
         if not text:
             return
@@ -144,7 +145,9 @@ class Orchestrator:
             self._resolve_confirmation(text)
             return
 
-        if bypass_wake or not self.wake.required:
+        if wake_satisfied:
+            command = self.wake.clean_spotter_command(text)
+        elif bypass_wake or not self.wake.required:
             command = self.wake.strip(text)[1] if self.wake.required else text
         else:
             heard, command = self.wake.strip(text)

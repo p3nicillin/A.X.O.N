@@ -209,7 +209,7 @@ class Bridge:
         # show the user's spoken command (typed commands echo themselves in JS)
         text = payload.get("text", "").strip()
         if text and payload.get("wake_satisfied") and not payload.get("wake_only"):
-            self.user_said(text)
+            self.user_said(self.orch.wake.clean_spotter_command(text))
 
     def _on_amplitude(self, level: float) -> None:
         # throttle to ~25 Hz; evaluate_js per audio frame would saturate the bridge
