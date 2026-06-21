@@ -146,6 +146,31 @@ class Bridge:
         self.set_panel_data(self.panel_snapshot())
         return result
 
+    def add_speech_correction(self, heard: str, expected: str) -> dict:
+        profile = getattr(getattr(self.orch.audio_input, "stt", None),
+                          "profile", None)
+        if profile is None:
+            return {"ok": False, "error": "speech profile unavailable"}
+        try:
+            correction = profile.add(str(heard or ""), str(expected or ""))
+            self._panel_dirty.set()
+            return {"ok": True, "correction": correction}
+        except (OSError, ValueError) as exc:
+            return {"ok": False, "error": str(exc)}
+
+    def remove_speech_correction(self, heard: str) -> dict:
+        profile = getattr(getattr(self.orch.audio_input, "stt", None),
+                          "profile", None)
+        if profile is None:
+            return {"ok": False, "error": "speech profile unavailable"}
+        try:
+            removed = profile.remove(str(heard or ""))
+            self._panel_dirty.set()
+            return {"ok": removed,
+                    "error": "correction not found" if not removed else ""}
+        except OSError as exc:
+            return {"ok": False, "error": str(exc)}
+
     @staticmethod
     def _audit_summary(record: dict) -> str:
         kind = str(record.get("type", "event"))
@@ -440,6 +465,8 @@ class Bridge:
             except Exception:
                 memories = []
         active = ai_health.get("active", "rules")
+        stt_engine = getattr(getattr(self.orch, "audio_input", None), "stt", None)
+        speech_profile = getattr(stt_engine, "profile", None)
         active_info = ai_health.get("backends", {}).get(active, {})
         crash_reporter = getattr(self.orch, "crash_reporter", None)
         crash = crash_reporter.summary() if crash_reporter is not None else {
@@ -490,11 +517,20 @@ class Bridge:
                 "voice": getattr(self.orch.tts, "selected_voice", self.config.tts_voice or "system default"),
                 "rate": self.config.tts_rate,
                 "stt": "online" if bool(getattr(getattr(self.orch.audio_input, "stt", None), "available", False)) else "offline",
-                "stt_model": Path(getattr(getattr(self.orch.audio_input, "stt", None), "_cmd_path", "") or "").name or "none",
+                "stt_backend": getattr(
+                    getattr(self.orch.audio_input, "stt", None),
+                    "command_backend", "none"),
+                "stt_model": getattr(
+                    getattr(self.orch.audio_input, "stt", None),
+                    "model_name", "") or Path(getattr(
+                        getattr(self.orch.audio_input, "stt", None),
+                        "_cmd_path", "") or "").name or "none",
                 "wake_ack": self.config.wake_ack_phrase,
                 "persona": "AXON",
                 "address_term": self.config.address_term,
                 "available_voices": list(getattr(self.orch.tts, "voice_names", [])),
+                "speech_corrections": (speech_profile.snapshot()
+                                       if speech_profile is not None else []),
             },
             "settings": self.config.user_settings_snapshot(),
             "diagnostics": {
@@ -562,6 +598,12 @@ class _Api:
 
     def switch_ai_engine(self, engine: str) -> dict:
         return self._bridge.switch_ai_engine(engine)
+
+    def add_speech_correction(self, heard: str, expected: str) -> dict:
+        return self._bridge.add_speech_correction(heard, expected)
+
+    def remove_speech_correction(self, heard: str) -> dict:
+        return self._bridge.remove_speech_correction(heard)
 
     def get_audit_history(self, offset: int = 0, limit: int = 50) -> dict:
         return self._bridge.audit_history(offset, limit)

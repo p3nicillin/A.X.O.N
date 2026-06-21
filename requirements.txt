@@ -16,6 +16,7 @@ numpy>=1.26
 # --- Speech-to-text (offline, streaming). Requires a downloaded model.
 #     See README "Speech-to-text setup".
 vosk>=0.3.45
+faster-whisper>=1.2,<2  # higher-accuracy local command transcription
 
 # --- Text-to-speech (offline, low latency, interruptible) on Windows SAPI5 ---
 pyttsx3>=2.90

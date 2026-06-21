@@ -31,6 +31,8 @@ it is a first-install or machine-policy concern.
 | Visual state: error | Failed execution sets `AxonState.ERROR` | Core alert state |
 | Synaptic activity | Live CPU/memory/network telemetry, microphone amplitude, request deltas, backend latency, and pipeline state events | Firing rate, pulse energy/speed, and node glow are data-driven rather than timer-randomised |
 | Wake word | `wake_word`, aliases, `require_wake_word`, wake spotter | Diagnostics panel shows wake word/required state; status bar reflects listening |
+| Hybrid speech recognition | Grammar-biased Vosk wake detector plus faster-whisper `small.en` command transcription; automatic Vosk fallback | Voice panel reports active recognizer/model; model loads in background |
+| Personal speech adaptation | Persistent phrase-level heard→intended corrections; no raw audio or biometric embedding retained | Voice panel adds/removes corrections live from `data/speech_profile.json` |
 | Mic on/off | Audio input `set_enabled`; web mic button | Bottom mic control, waveform, diagnostics mic availability |
 | Barge-in / Esc | TTS interrupt path in renderer affordances | Existing renderer control remains; listed in diagnostics |
 | Dev input | Hidden developer text input/F2 affordance | Bottom input remains developer affordance, not primary chat surface |

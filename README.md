@@ -121,7 +121,8 @@ absent and prints a deprecation notice. Vendor keys such as
 
 ### Capability notes (install only what you want)
 * **Microphone + VAD** — `pip install sounddevice numpy`
-* **Speech-to-text** — `pip install vosk`, then a model (below)
+* **Speech-to-text** — `faster-whisper` transcribes commands locally while a
+  small Vosk model handles the wake word. `auto` falls back to full Vosk.
 * **Text-to-speech** — `pip install pyttsx3 pywin32` (uses Windows SAPI5)
 * **Local LLM core (default, free)** — install [Ollama](https://ollama.com) and
   run `ollama pull llama3.2:3b`. No API key, nothing leaves the device.
@@ -135,11 +136,17 @@ absent and prints a deprecation notice. Vendor keys such as
   set `weather_default_location` when you want a default other than London.
 
 ### Speech-to-text setup
-1. Download a model from <https://alphacephei.com/vosk/models> — start with
+1. Download a wake model from <https://alphacephei.com/vosk/models> — start with
    `vosk-model-small-en-us-0.15` (~40 MB).
 2. Unzip it into `models/` so you have e.g.
    `models/vosk-model-small-en-us-0.15/`.
-3. AXON auto-detects it (or set `stt_model_path` in `config.toml`).
+3. AXON auto-detects it. On first run, faster-whisper downloads `small.en` into
+   `models/whisper`; set `stt_engine = "vosk"` to use the previous backend.
+
+The Voice panel provides personal transcript adaptation. Add a recurring
+mishearing and its intended phrase (for example, `ma is` → `what is`). AXON
+applies it to future transcripts and stores only text corrections in
+`data/speech_profile.json`; raw enrollment audio is never retained.
 
 ### The AI core — free & local by default
 A.X.O.N parses intent with a **local LLM on your own machine**. The entire

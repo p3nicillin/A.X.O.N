@@ -8,6 +8,7 @@ from axon.core.event_bus import EventBus
 from axon.core.states import AxonState
 from axon.skills.registry import SkillRegistry
 from axon.visual import web_window
+from axon.perception.speech_profile import SpeechProfile
 
 
 class FakeMetrics:
@@ -164,6 +165,22 @@ def test_response_latency_tracks_full_turn(monkeypatch):
 
     assert bridge._last_latency_ms == 420.0
     assert bridge._latency_p95() == 420.0
+
+
+def test_speech_corrections_are_managed_through_bridge(tmp_path):
+    bridge = build_bridge()
+    profile = SpeechProfile(tmp_path / "speech.json")
+    bridge.orch.audio_input.stt.profile = profile
+
+    added = bridge.add_speech_correction("ma is", "what is")
+    snapshot = bridge.panel_snapshot()
+    removed = bridge.remove_speech_correction("ma is")
+
+    bridge.close()
+    assert added["ok"] is True
+    assert snapshot["voice"]["speech_corrections"] == [
+        {"heard": "ma is", "expected": "what is"}]
+    assert removed["ok"] is True
 
 
 def test_telemetry_snapshot_has_no_synthetic_values(monkeypatch):

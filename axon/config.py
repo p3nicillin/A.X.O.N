@@ -85,6 +85,10 @@ class Config:
     # --- Speech to text ---
     stt_model_path: str = ""        # command model (large, accurate). "" = auto
     stt_wake_model_path: str = ""   # wake model (small, grammar-capable). "" = auto
+    stt_engine: str = "auto"         # auto | faster_whisper | vosk
+    stt_whisper_model: str = "small.en"
+    stt_whisper_device: str = "cpu"  # use cuda after installing CUDA runtime libs
+    stt_whisper_compute_type: str = "int8"
     sample_rate: int = 16000
 
     # --- Voice activity detection (energy based) ---

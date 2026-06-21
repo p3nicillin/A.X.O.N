@@ -156,6 +156,8 @@ def main() -> None:
         "privacy": "local" if ai_health.get("active") != "cloud" else "cloud",
         "microphone": audio.available,
         "speech_to_text": "loading" if stt.can_load() else False,
+        "stt_backend": stt.command_backend,
+        "stt_model": stt.model_name,
         "text_to_speech": tts.available,
         "wake_word_required": config.require_wake_word,
         "renderer": backend,
@@ -176,7 +178,9 @@ def main() -> None:
     def on_stt_ready(ok: bool, reason: str) -> None:
         if ok:
             bus.publish(Event.LOG, {"level": "info", "source": "stt",
-                "message": "Speech recognition online."})
+                "message": (f"Speech recognition online: {stt.command_backend} "
+                            f"({stt.model_name}); Vosk wake="
+                            f"{'on' if stt.has_wake else 'off'}.")})
         else:
             bus.publish(Event.LOG, {"level": "warn", "source": "stt",
                 "message": f"Speech recognition unavailable: {reason}"})
