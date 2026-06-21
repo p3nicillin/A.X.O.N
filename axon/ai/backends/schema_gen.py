@@ -33,10 +33,18 @@ _RULES = (
     "- Choose exactly one intent type from the list below; never invent a type.\n"
     "- Only use parameter names listed for the chosen intent; never add others.\n"
     "- Use \"chat\" only for greetings/thanks/small talk (no action).\n"
+    "- Use \"answer\" for general knowledge, explanations, writing, coding, "
+    "or advice that needs no live data or action; put the useful answer in "
+    "response_text so it stays inside AXON.\n"
+    "- Questions beginning explain/why/how, requests to write/summarise, and "
+    "coding or educational questions MUST use \"answer\" unless a dedicated "
+    "skill is required. Do not reject ordinary knowledge questions.\n"
+    "- Prefer a dedicated skill over web_search. Use web_search only for "
+    "current/external information not covered by another skill.\n"
     "- Use \"unknown\" if the request matches no listed capability. Do NOT invent "
     "or simulate a capability that is not listed.\n"
     "- Set confidence below 0.5 when the request is ambiguous.\n"
-    "- response_text is spoken aloud, so keep it short.\n"
+    "- response_text is spoken aloud; be concise but fully answer the request.\n"
     "- Output the JSON object only — no markdown, no prose."
 )
 
@@ -64,16 +72,21 @@ def _few_shot(specs: list[IntentSpec]) -> str:
         ("web_search", '{"thought":"web lookup","intent":{"type":"web_search",'
          '"parameters":{"query":"speed of light"}},"response_text":'
          '"Searching now, sir.","confidence":0.9}'),
+        ("answer", '{"thought":"general explanation","intent":{"type":"answer",'
+         '"parameters":{}},"response_text":"Recursion is when a function solves '
+         'a problem by calling itself on a smaller version until it reaches a '
+         'base case, sir.","confidence":0.96}'),
     ]
     examples = ["User: \"what time is it\"\n" + pool[0][1]] if "get_time" in names else []
     for name, js in pool[1:]:
         if name in names:
             utter = {"open_app": "open notepad",
-                     "web_search": "look up the speed of light"}[name]
+                     "web_search": "look up the speed of light",
+                     "answer": "explain recursion in one sentence"}[name]
             examples.append(f'User: "{utter}"\n{js}')
     # the all-important escape hatch
     examples.append(
-        'User: "reverse the polarity of the neutron flow"\n'
+        'User: "teleport me to Mars"\n'
         '{"thought":"no matching capability","intent":{"type":"unknown",'
         '"parameters":{}},"response_text":"I\'m afraid I can\'t do that, sir.",'
         '"confidence":0.95}')

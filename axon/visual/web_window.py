@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import queue
 import threading
 import time
 from collections import deque
@@ -62,13 +63,27 @@ class Bridge:
         self._amp_at = 0.0
         self._started_at = time.time()
         self._last_latency_ms = 0.0
+        self._backend_latency_ms = 0.0
+        self._turn_started_at = 0.0
+        self._turn_latencies = deque(maxlen=100)
         self._logs = deque(maxlen=200)
         self._commands = deque(maxlen=200)
+        self._panel_dirty = threading.Event()
         # net counters for throughput readout
         self._net = None
         # the page signals readiness via on_ready(); until then evaluate_js is
         # premature (DOM not built) and WebView2 spams off-thread COM errors.
         self.ready = threading.Event()
+        # evaluate_js can block for seconds while WebView2 marshals to its UI
+        # thread. Never let that stall audio capture or the command pipeline.
+        # State-like updates are coalesced; conversational messages keep order.
+        self._js_queue: "queue.Queue[tuple[str | None, str]]" = queue.Queue(
+            maxsize=128)
+        self._js_coalesced: dict[str, str] = {}
+        self._js_lock = threading.Lock()
+        self._js_stop = threading.Event()
+        self._js_thread = threading.Thread(target=self._js_loop, daemon=True)
+        self._js_thread.start()
 
     # ====================  JS -> Python  ====================
     def on_ready(self) -> bool:
@@ -88,6 +103,7 @@ class Bridge:
         (the same contract as the Qt/Tk dev inputs)."""
         text = (text or "").strip()
         if text:
+            self._turn_started_at = time.monotonic()
             self.orch.submit_text(text, bypass_wake=True)
         return True
 
@@ -102,6 +118,11 @@ class Bridge:
                 pass
         self.set_listening(self._listening)
         return self._listening
+
+    def interrupt(self) -> bool:
+        """Cut current speech without blocking the WebView thread."""
+        self.orch.tts.stop()
+        return True
 
     def set_skill_enabled(self, name: str, enabled: bool) -> dict:
         ok = self.orch.registry.set_enabled(name, bool(enabled))
@@ -175,15 +196,41 @@ class Bridge:
                 "total": len(records)}
 
     # ====================  Python -> JS  ====================
-    def js(self, code: str) -> None:
+    def js(self, code: str, *, key: str | None = None) -> None:
         # hold every Python->JS call until the page has booted (on_ready),
         # otherwise evaluate_js runs against an unbuilt DOM and WebView2 errors.
         if self.window is None or not self.ready.is_set():
             return
+        if key is not None:
+            with self._js_lock:
+                self._js_coalesced[key] = code
+            return
         try:
-            self.window.evaluate_js(code)
-        except Exception:
-            pass  # window may be mid-teardown
+            self._js_queue.put_nowait((None, code))
+        except queue.Full:
+            # Preserve real-time behavior under a wedged/closing WebView. The
+            # next state snapshot reconciles any dropped cosmetic update.
+            pass
+
+    def _js_loop(self) -> None:
+        while not self._js_stop.is_set():
+            code = None
+            try:
+                _key, code = self._js_queue.get(timeout=0.02)
+            except queue.Empty:
+                with self._js_lock:
+                    if self._js_coalesced:
+                        key = next(iter(self._js_coalesced))
+                        code = self._js_coalesced.pop(key)
+            if code is None or self.window is None or not self.ready.is_set():
+                continue
+            try:
+                self.window.evaluate_js(code)
+            except Exception:
+                pass  # window may be mid-teardown
+
+    def close(self) -> None:
+        self._js_stop.set()
 
     def reply(self, text: str) -> None:
         self.js(f"window.AXON.reply({json.dumps(text)})")
@@ -207,25 +254,40 @@ class Bridge:
         self.js(f"window.AXON.setAgents({json.dumps(agents)})")
 
     def set_listening(self, on: bool) -> None:
-        self.js(f"window.AXON.setListening({json.dumps(bool(on))})")
+        self.js(f"window.AXON.setListening({json.dumps(bool(on))})",
+                key="listening")
 
     def set_amplitude(self, level: float) -> None:
-        self.js(f"window.AXON.setAmplitude({float(level):.3f})")
+        self.js(f"window.AXON.setAmplitude({float(level):.3f})", key="amplitude")
 
     def set_status(self, text: str) -> None:
-        self.js(f"window.AXON.setStatus({json.dumps(text)})")
+        self.js(f"window.AXON.setStatus({json.dumps(text)})", key="status")
 
     def set_voice_chip(self, text: str) -> None:
-        self.js(f"window.AXON.setVoiceChip({json.dumps(text)})")
+        self.js(f"window.AXON.setVoiceChip({json.dumps(text)})", key="voice_chip")
 
     def set_greeting(self, text: str) -> None:
-        self.js(f"window.AXON.setGreeting({json.dumps(text)})")
+        self.js(f"window.AXON.setGreeting({json.dumps(text)})", key="greeting")
 
     def set_telemetry(self, data: dict) -> None:
-        self.js(f"window.AXON.setTelemetry({json.dumps(data)})")
+        self.js(f"window.AXON.setTelemetry({json.dumps(data)})", key="telemetry")
 
     def set_panel_data(self, data: dict) -> None:
-        self.js(f"window.AXON.setPanelData({json.dumps(data)})")
+        self.js(f"window.AXON.setPanelData({json.dumps(data)})", key="panel")
+
+    def show_result(self, result) -> None:
+        if getattr(result, "skill", "") not in {
+                "WeatherSkill", "CalculatorSkill", "FileSystemSkill",
+                "SystemInfoSkill", "ScreenshotSkill"}:
+            return
+        payload = {
+            "ok": bool(getattr(result, "ok", False)),
+            "skill": getattr(result, "skill", "Skill"),
+            "summary": getattr(result, "summary", ""),
+            "data": getattr(result, "data", {}) or {},
+        }
+        self.js("window.AXON.showResult(" + json.dumps(
+            payload, default=str) + ")")
 
     # ====================  bus -> UI bridge  ====================
     def on_event(self, msg) -> None:
@@ -233,8 +295,10 @@ class Bridge:
         if ev == Event.STATE_CHANGED:
             self._on_state(msg.payload)
         elif ev == Event.TRANSCRIPT:
+            self._turn_started_at = time.monotonic()
             self._on_transcript(msg.payload or {})
         elif ev == Event.SPEAK_START:
+            self._finish_turn_latency()
             text = (msg.payload or {}).get("text", "")
             if text:
                 self.reply(text)
@@ -242,12 +306,13 @@ class Bridge:
             self._on_amplitude(float(msg.payload or 0.0))
         elif ev == Event.INTENT:
             self._on_intent(msg.payload)
-            self.set_panel_data(self.panel_snapshot())
+            self._panel_dirty.set()
         elif ev == Event.SKILL_RESULT:
-            self.set_panel_data(self.panel_snapshot())
+            self.show_result(msg.payload)
+            self._panel_dirty.set()
         elif ev == Event.COMMAND_LOG:
             self._commands.append(msg.payload or {})
-            self.set_panel_data(self.panel_snapshot())
+            self._panel_dirty.set()
         elif ev == Event.SUGGESTION:
             self._on_suggestion(msg.payload or {})
         elif ev == Event.LOG:
@@ -280,10 +345,27 @@ class Bridge:
         self.set_amplitude(level)
 
     def _on_intent(self, packet) -> None:
-        self._last_latency_ms = float(getattr(packet, "latency_ms", 0.0) or 0.0)
+        self._backend_latency_ms = float(
+            getattr(packet, "latency_ms", 0.0) or 0.0)
         thought = getattr(packet, "thought", "")
         if thought:
             self.push_thought(thought)
+
+    def _finish_turn_latency(self) -> None:
+        if not self._turn_started_at:
+            return
+        latency = round(max(
+            0.0, (time.monotonic() - self._turn_started_at) * 1000), 1)
+        self._last_latency_ms = latency
+        self._turn_latencies.append(latency)
+        self._turn_started_at = 0.0
+
+    def _latency_p95(self) -> float:
+        if not self._turn_latencies:
+            return 0.0
+        values = sorted(self._turn_latencies)
+        index = min(len(values) - 1, round(0.95 * (len(values) - 1)))
+        return round(values[index], 1)
 
     def _on_suggestion(self, payload: dict) -> None:
         # §16.3 proactive advice — shown as an AXON message, never auto-executed.
@@ -298,7 +380,7 @@ class Bridge:
             "message": payload.get("message", ""),
             "ts": time.strftime("%H:%M:%S"),
         })
-        self.set_panel_data(self.panel_snapshot())
+        self._panel_dirty.set()
 
     # ====================  telemetry  ====================
     def _agents(self, ai_health: dict | None = None) -> list[dict]:
@@ -378,6 +460,7 @@ class Bridge:
                 "intents": list(m.intents),
                 "parameters": {k: m.params_for(k) for k in m.intents},
                 "sensitive": bool(m.sensitive),
+                "sensitive_intents": list(m.sensitive_intents),
                 "enabled": self.orch.registry.is_enabled(m.name),
                 "settings": settings,
             })
@@ -425,6 +508,9 @@ class Bridge:
                 "planning_enabled": self.config.planning_enabled,
                 "critic_enabled": self.config.critic_enabled,
                 "confirm_sensitive": self.config.confirm_sensitive,
+                "response_latency_ms": round(self._last_latency_ms, 1),
+                "response_p95_ms": self._latency_p95(),
+                "backend_latency_ms": round(self._backend_latency_ms, 1),
                 "crash_reporting": crash.get("enabled", False),
                 "crash_reports": crash.get("count", 0),
                 "last_crash": ((crash.get("last") or {}).get("timestamp") or "none"),
@@ -435,6 +521,9 @@ class Bridge:
         self.ready.wait(timeout=15)       # don't push telemetry before the DOM
         while not stop.is_set():
             self.set_telemetry(self.snapshot())
+            if self._panel_dirty.is_set():
+                self._panel_dirty.clear()
+                self.set_panel_data(self.panel_snapshot())
             stop.wait(1.3)
 
 
@@ -458,6 +547,9 @@ class _Api:
 
     def toggle_listening(self) -> bool:
         return self._bridge.toggle_listening()
+
+    def interrupt(self) -> bool:
+        return self._bridge.interrupt()
 
     def get_panel_data(self) -> dict:
         return self._bridge.panel_snapshot()
@@ -518,5 +610,6 @@ class AxonWebWindow:
 
     def _on_closed(self) -> None:
         self._stop.set()
+        self.bridge.close()
         if self._on_close_cb:
             self._on_close_cb()

@@ -26,9 +26,15 @@ class SkillManifest:
     # generate its prompt + JSON schema, so adding a skill never requires editing
     # the AI core. Intents omitted here are treated as taking no parameters.
     intent_params: dict[str, list[str]] = field(default_factory=dict)
+    # Some skills expose both read-only and mutating intents.  Keep the legacy
+    # whole-skill flag, but allow manifests to gate only the mutating actions.
+    sensitive_intents: list[str] = field(default_factory=list)
 
     def params_for(self, intent_type: str) -> list[str]:
         return list(self.intent_params.get(intent_type, []))
+
+    def is_sensitive(self, intent_type: str) -> bool:
+        return self.sensitive or intent_type in self.sensitive_intents
 
 
 class Skill(ABC):

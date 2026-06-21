@@ -34,7 +34,8 @@ _NEGATIVE = re.compile(r"\b(no|nope|cancel|stop|don'?t|never mind)\b")
 
 # §3 STEP5: destructive / ambiguous intents that always require confirmation,
 # independent of whole-skill sensitivity.
-_DESTRUCTIVE_INTENTS = {"close_app", "clear_notes"}
+_DESTRUCTIVE_INTENTS = {
+    "close_app", "close_window", "clear_notes", "delete_path"}
 
 
 class Orchestrator:
@@ -240,7 +241,8 @@ class Orchestrator:
         """§3 STEP5 gate: a sensitive skill or a destructive intent must be
         confirmed by the user before it runs."""
         return bool(self.config.confirm_sensitive and skill is not None and (
-            skill.manifest.sensitive or intent.type in _DESTRUCTIVE_INTENTS))
+            skill.manifest.is_sensitive(intent.type)
+            or intent.type in _DESTRUCTIVE_INTENTS))
 
     # -- pipeline core (worker thread) ---------------------------------------
     def _process(self, text: str, wake: bool = True) -> None:

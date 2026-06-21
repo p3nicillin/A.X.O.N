@@ -27,10 +27,19 @@ _REQUIRED_PARAMS: dict[str, list[str]] = {
     "web_search": ["query"],
     "add_note": ["text"],
     "find_file": ["query"],
+    "set_clipboard": ["text"],
+    "type_text": ["text"],
+    "send_keystroke": ["keys"],
+    "read_file": ["path"],
+    "write_file": ["path", "text"],
+    "create_folder": ["path"],
+    "move_path": ["source", "destination"],
+    "delete_path": ["path"],
+    "calculate": ["expression"],
 }
 
 # destructive intents — allowed, but high risk (confirmation gate covers them).
-_DESTRUCTIVE = {"close_app", "clear_notes"}
+_DESTRUCTIVE = {"close_app", "close_window", "clear_notes", "delete_path"}
 
 # file parameters that must stay inside the sandbox (§10).
 _PATH_PARAMS = ("path", "query", "file")
@@ -83,7 +92,7 @@ class Critic:
                     reason="sandbox violation")
         if intent.type in _DESTRUCTIVE:
             risk = "high"
-        elif skill.manifest.sensitive:
+        elif skill.manifest.is_sensitive(intent.type):
             risk = "medium"
 
         # low confidence is a soft signal, not a hard block.

@@ -131,6 +131,8 @@ absent and prints a deprecation notice. Vendor keys such as
   from the Windows Credential Manager instead of an env var.
 * **System gauges** — `pip install psutil`
 * **Web search** — `pip install requests`
+* **In-app weather** — key-free Open-Meteo current conditions and forecasts;
+  set `weather_default_location` when you want a default other than London.
 
 ### Speech-to-text setup
 1. Download a model from <https://alphacephei.com/vosk/models> — start with
@@ -195,8 +197,8 @@ artifacts from `data/crashes/`.
 ## 4. Using it
 
 * **Speak** naturally (mic + STT installed): *"open notepad"*, *"what time is
-  it"*, *"system status"*, *"note that I need milk"*, *"search for the speed of
-  light"*.
+  it"*, *"what is the weather"*, *"calculate 17 times 6"*, *"explain recursion"*,
+  *"write hello to file notes.txt"*, or *"focus window Spotify"*.
 * **No mic?** Type the same phrases in the **DEV INPUT** box and press Enter.
   (This is a developer affordance, not a chat UI — hide it with **F2**.)
 * **Esc** interrupts speech (barge-in). **F2** toggles the dev input.
@@ -215,17 +217,25 @@ artifacts from `data/crashes/`.
 ## 5. Skills
 
 Each skill is a folder under `axon/skills/` with a `manifest.json` (name,
-version, declared intents, `sensitive` flag) and a `handler.py` exposing a
+version, declared intents, skill/intent sensitivity) and a `handler.py` exposing a
 `SKILL` object implementing `can_handle()` / `execute()`.
 
 | Skill | Intents | Notes |
 |-------|---------|-------|
 | TimeDate | `get_time`, `get_date` | |
-| AppLauncher | `open_app`, `close_app` | **whitelisted** apps only |
+| AppLauncher | `open_app`, `close_app` | named Windows applications; closing requires confirmation |
 | SystemInfo | `system_info` | also feeds the HUD gauges |
 | WebSearch | `web_search` | instant answer + browser fallback |
+| Weather | `get_weather` | current conditions/forecast remain inside AXON; no browser or API key |
+| Calculator | `calculate` | safe local arithmetic/functions; no code execution |
 | Notes | `add_note`, `read_notes`, `clear_notes` | local JSON |
-| FileSystem | `list_files`, `find_file`, `open_folder` | **sandboxed** to `data/workspace`, read-only, `sensitive` |
+| FileSystem | `list_files`, `find_file`, `read_file`, `write_file`, `create_folder`, `move_path`, `delete_path`, `open_folder` | sandboxed to `data/workspace`; mutations require confirmation |
+| MediaControl | `play_pause`, `next_track`, `previous_track` | bounded OS media keys |
+| VolumeControl | `volume_up`, `volume_down`, `mute_toggle` | adjustment steps are clamped |
+| WindowControl | `focus_window`, `minimize_window`, `maximize_window`, `restore_window`, `close_window` | foreground/named windows; graceful close requires confirmation |
+| Clipboard | `read_clipboard`, `set_clipboard` | writes require confirmation; reads return a bounded preview |
+| Screenshot | `capture_screenshot` | confirmed capture to `data/workspace/screenshots` only |
+| Keyboard | `type_text`, `send_keystroke` | bounded, allow-listed, and always confirmed |
 
 **Add a skill:** copy a folder, edit `manifest.json` + `handler.py`, restart.
 Discovery is automatic — no other file changes.
@@ -235,23 +245,29 @@ Discovery is automatic — no other file changes.
 ## 6. Safety (hard limits)
 
 * The AI **cannot act** — it only emits intent; the skill engine acts.
-* AppLauncher only runs **whitelisted** apps; FileSystem is confined to
-  `data/workspace` with path-escape checks and has **no** write/delete intents.
-* `sensitive` skills require spoken **confirmation** (`confirm_sensitive`).
+* FileSystem is confined to `data/workspace` with path-escape checks, bounded
+  text reads/writes, atomic replacement, and non-recursive deletion;
+  screenshots cannot escape that workspace.
+* Sensitive skills and individual mutating intents require spoken
+  **confirmation** (`confirm_sensitive`).
 * No credential access, no remote code execution, no hidden background actions.
 * Every action is **logged and visible** in the HUD.
+
+General explanations, coding questions, writing help, and advice use the local
+model's tool-less `answer` intent and remain in AXON. Live or actionable requests
+still route through a declared skill.
 
 ---
 
 ## 7. Future roadmap
 
-* **Memory system** — long-term preferences + history (extend `ai/context.py`).
+* **Visual perception** — consented, turn-scoped local screen understanding.
 * **True wake-word spotter** — swap the post-STT gate for openWakeWord/Porcupine.
 * **GPU visual core** — PySide6 + moderngl shader renderer behind the existing
   `CoreRenderer` interface; "visual evolution" that changes with usage.
 * **Plugin marketplace** — manifests already version + declare capabilities;
   add signing + a download path.
 * **Desktop awareness** — an active-window skill feeding context to the AI.
-* **Multi-agent** — planner / executor / critic agents around the intent engine.
+* **Speaker identity** — local voice embeddings and capability-scoped authz.
 * **Adaptive personality** — tone/voice profiles in `config` + TTS selection.
 ```

@@ -52,6 +52,9 @@ class IntentSpec:
 # not owned by a skill — "chat" is small-talk, "unknown" is the safe escape hatch
 # so a model never has to hallucinate a capability that doesn't exist (§2.4).
 CHAT_SPEC = IntentSpec("chat", "Greetings, thanks, or small talk — no action.")
+ANSWER_SPEC = IntentSpec(
+    "answer", "General knowledge, explanations, writing help, or advice that "
+    "needs no tool, live data, or desktop action. Answer directly in-app.")
 UNKNOWN_SPEC = IntentSpec(
     "unknown", "The request matches no available capability. The safe escape "
     "hatch; never invent an intent that is not listed.")
@@ -67,14 +70,14 @@ def specs_from_catalogue(catalogue) -> list[IntentSpec]:
                 name=intent,
                 description=m.description,
                 parameters=m.params_for(intent),
-                sensitive=m.sensitive,
+                sensitive=m.is_sensitive(intent),
             ))
     return specs
 
 
 def all_specs(catalogue) -> list[IntentSpec]:
     """Skill intents plus the universal chat/unknown intents."""
-    return specs_from_catalogue(catalogue) + [CHAT_SPEC, UNKNOWN_SPEC]
+    return specs_from_catalogue(catalogue) + [CHAT_SPEC, ANSWER_SPEC, UNKNOWN_SPEC]
 
 
 class IntentBackend(ABC):

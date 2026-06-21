@@ -1,6 +1,8 @@
 from types import SimpleNamespace
+import time
 
 from axon import __version__
+from axon.ai.schema import SkillResult
 from axon.config import Config
 from axon.core.event_bus import EventBus
 from axon.core.states import AxonState
@@ -64,12 +66,104 @@ def test_panel_snapshot_uses_live_project_objects():
     skill_names = {s["name"] for s in data["skills"]}
     assert {"AppLauncherSkill", "MediaControlSkill", "VolumeSkill",
             "WindowControlSkill", "ClipboardSkill"} <= skill_names
+    clipboard = next(s for s in data["skills"] if s["name"] == "ClipboardSkill")
+    assert clipboard["sensitive_intents"] == ["set_clipboard"]
     assert any(agent["name"] == "Speech recognition" and
                agent["status"] == "active" for agent in data["agents"])
     assert data["voice"]["tts_backend"] == "SAPI5"
     assert data["voice"]["voice"] == "Test Voice"
     assert data["voice"]["stt_model"] == "live-model"
     assert data["diagnostics"]["crash_reports"] == 2
+
+
+def test_webview_updates_do_not_block_pipeline_and_coalesce_state():
+    bridge = build_bridge()
+
+    class SlowWindow:
+        def __init__(self):
+            self.calls = []
+
+        def evaluate_js(self, code):
+            time.sleep(0.1)
+            self.calls.append(code)
+
+    window = SlowWindow()
+    bridge.window = window
+    bridge.ready.set()
+
+    started = time.monotonic()
+    bridge.set_status("ONE")
+    bridge.set_status("TWO")
+    bridge.set_amplitude(0.2)
+    bridge.set_amplitude(0.8)
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 0.05
+    deadline = time.monotonic() + 1.0
+    while len(window.calls) < 2 and time.monotonic() < deadline:
+        time.sleep(0.01)
+    bridge.close()
+    assert any('setStatus("TWO")' in call for call in window.calls)
+    assert any("setAmplitude(0.800)" in call for call in window.calls)
+
+
+def test_log_event_defers_expensive_panel_snapshot(monkeypatch):
+    bridge = build_bridge()
+    monkeypatch.setattr(bridge, "panel_snapshot",
+                        lambda: (_ for _ in ()).throw(AssertionError(
+                            "panel snapshot must be deferred")))
+
+    bridge._on_log({"level": "info", "source": "test", "message": "event"})
+
+    bridge.close()
+    assert bridge._panel_dirty.is_set()
+
+
+def test_interrupt_stops_tts():
+    bridge = build_bridge()
+    stopped = []
+    bridge.orch.tts.stop = lambda: stopped.append(True)
+
+    assert bridge.interrupt() is True
+
+    bridge.close()
+    assert stopped == [True]
+
+
+def test_data_rich_skill_result_is_sent_to_in_app_card():
+    bridge = build_bridge()
+
+    class Window:
+        calls = []
+
+        def evaluate_js(self, code):
+            self.calls.append(code)
+
+    window = Window()
+    bridge.window = window
+    bridge.ready.set()
+    bridge.show_result(SkillResult(
+        ok=True, skill="CalculatorSkill", summary="2 + 2 = 4",
+        data={"result": 4}))
+    deadline = time.monotonic() + 0.5
+    while not window.calls and time.monotonic() < deadline:
+        time.sleep(0.01)
+
+    bridge.close()
+    assert any("showResult" in call and "CalculatorSkill" in call
+               for call in window.calls)
+
+
+def test_response_latency_tracks_full_turn(monkeypatch):
+    bridge = build_bridge()
+    times = iter([10.0, 10.42])
+    monkeypatch.setattr(web_window.time, "monotonic", lambda: next(times))
+    bridge._turn_started_at = web_window.time.monotonic()
+
+    bridge._finish_turn_latency()
+
+    assert bridge._last_latency_ms == 420.0
+    assert bridge._latency_p95() == 420.0
 
 
 def test_telemetry_snapshot_has_no_synthetic_values(monkeypatch):

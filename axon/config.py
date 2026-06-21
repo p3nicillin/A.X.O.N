@@ -108,6 +108,9 @@ class Config:
     # for the wake word, then a full recogniser captures the command.
     use_wake_spotter: bool = True
     active_listen_timeout: float = 8.0  # seconds to wait for a command after waking
+    # Audio retained in memory only (never persisted) so a command spoken in
+    # the same breath as the wake word is not clipped at the recogniser handoff.
+    wake_preroll_ms: int = 1800
 
     # --- Text to speech ---
     tts_rate: int = 178             # words per minute
@@ -159,6 +162,7 @@ class Config:
     # --- Safety ---
     confirm_sensitive: bool = True  # require explicit confirmation for guarded skills
     web_fallback_on_unknown: bool = False  # §2.3/§8: route UNKNOWN -> WEB_SEARCH
+    weather_default_location: str = "London"  # used when a weather query omits place
     disabled_skills: list[str] = field(default_factory=list)
 
     @classmethod

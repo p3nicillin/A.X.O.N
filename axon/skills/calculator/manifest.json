@@ -1,0 +1,11 @@
+{
+  "name": "CalculatorSkill",
+  "version": "1.0.0",
+  "description": "Evaluates bounded arithmetic and common mathematical functions locally.",
+  "intents": ["calculate"],
+  "intent_params": {
+    "calculate": ["expression"]
+  },
+  "sensitive": false,
+  "author": "core"
+}

@@ -1,9 +1,16 @@
 {
   "name": "WindowControlSkill",
   "version": "1.0.0",
-  "description": "Minimises, maximises or restores the foreground window.",
-  "intents": ["minimize_window", "maximize_window", "restore_window"],
-  "intent_params": {},
+  "description": "Focuses or changes the state of foreground and named Windows applications.",
+  "intents": ["focus_window", "minimize_window", "maximize_window", "restore_window", "close_window"],
+  "intent_params": {
+    "focus_window": ["title"],
+    "minimize_window": ["title"],
+    "maximize_window": ["title"],
+    "restore_window": ["title"],
+    "close_window": ["title"]
+  },
+  "sensitive_intents": ["close_window"],
   "sensitive": false,
   "author": "core"
 }

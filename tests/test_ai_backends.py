@@ -61,7 +61,7 @@ def test_schema_enum_is_sourced_from_registry():
     schema = build_json_schema(SPECS)
     enum = schema["properties"]["intent"]["properties"]["type"]["enum"]
     assert "get_time" in enum and "open_app" in enum
-    assert "chat" in enum and "unknown" in enum
+    assert "chat" in enum and "answer" in enum and "unknown" in enum
     # a skill that doesn't exist must not appear
     assert "teleport" not in enum
 
@@ -220,4 +220,17 @@ def test_build_engine_applies_nested_local_config():
 def test_specs_from_catalogue_excludes_universal_intents():
     names = {s.name for s in specs_from_catalogue(CATALOGUE)}
     assert "chat" not in names and "unknown" not in names
+    assert "answer" not in names
     assert "get_time" in names
+
+
+def test_general_answer_is_toolless_and_stays_in_app():
+    reply = json.dumps({"thought": "explanation", "intent": {
+        "type": "answer", "parameters": {}},
+        "response_text": "A concise local explanation.", "confidence": 0.9})
+
+    packet = local_backend([reply]).parse("explain recursion", Context(), SPECS)
+
+    assert packet.intent.type == "answer"
+    assert packet.needs_skill is False
+    assert packet.response_text == "A concise local explanation."

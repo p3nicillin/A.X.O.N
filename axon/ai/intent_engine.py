@@ -88,6 +88,46 @@ class LocalIntentEngine:
         if re.search(r"\b(time|clock|what time)\b", t):
             return packet("time query", "get_time", {}, "")
 
+        # --- deterministic arithmetic -------------------------------------
+        if (re.search(r"\b(calculate|compute|work out)\b", t)
+                or re.search(r"\d\s*(?:\+|-|\*|/|%|plus|minus|times|"
+                             r"multiplied|divided)\s*\d", t)
+                or re.search(r"\d+(?:\.\d+)?\s+percent of\s+\d", t)):
+            expression = re.sub(
+                r"^(?:please\s+)?(?:calculate|compute|work out|what is)\s+",
+                "", t).strip(" ?.!")
+            replacements = (
+                (r"\bmultiplied by\b", "*"), (r"\btimes\b", "*"),
+                (r"\bdivided by\b", "/"), (r"\bplus\b", "+"),
+                (r"\bminus\b", "-"), (r"\bto the power of\b", "**"),
+            )
+            for pattern, replacement in replacements:
+                expression = re.sub(pattern, replacement, expression)
+            expression = re.sub(
+                r"(\d+(?:\.\d+)?)\s+percent of\s+(\d+(?:\.\d+)?)",
+                r"(\1/100)*\2", expression)
+            return packet("arithmetic", "calculate",
+                          {"expression": expression}, "")
+
+        # --- weather (structured in-app result; never a browser fallback) ---
+        if re.search(r"\b(weather|forecast|temperature outside)\b", t):
+            location = ""
+            m = re.search(r"\b(?:in|at|for)\s+(.+)$", text, re.IGNORECASE)
+            if m:
+                location = re.sub(
+                    r"\s+\b(today|tonight|tomorrow|this week|next week)\b.*$",
+                    "", m.group(1), flags=re.IGNORECASE).strip(" ?.!")
+                if location.lower() in {"today", "tonight", "tomorrow",
+                                       "this week", "next week"}:
+                    location = ""
+            days = 7 if re.search(r"\b(week|7 day)\b", t) else (
+                3 if re.search(r"\b(forecast|next few days)\b", t) else (
+                    2 if "tomorrow" in t else 1))
+            params = {"days": days}
+            if location:
+                params["location"] = location
+            return packet("weather query", "get_weather", params, "")
+
         # --- system info ---
         if re.search(r"\b(cpu|memory|ram|system status|how('|')?s the system|battery|disk)\b", t):
             return packet("system telemetry", "system_info", {}, "")
@@ -112,6 +152,28 @@ class LocalIntentEngine:
                 r"\b(read|show|what(?:'s| is)?|paste|whats)\b", t):
             return packet("read clipboard", "read_clipboard", {}, "")
 
+        # --- explicit screen capture (saved only inside the workspace) ---
+        m = re.search(
+            r"\b(?:take|capture|save)(?: a)? screenshot(?: (?:called|named)\s+([^\\/:*?\"<>|]+))?\b",
+            text, re.IGNORECASE)
+        if m:
+            params = {"filename": m.group(1).strip()} if m.group(1) else {}
+            return packet("capture screenshot", "capture_screenshot", params, "")
+
+        # --- keyboard input (always confirmation-gated by its manifest) ---
+        m = re.search(r"\btype\s+(.+)", text, re.IGNORECASE)
+        if m and m.group(1).strip():
+            return packet("type text", "type_text",
+                          {"text": m.group(1).strip()}, "")
+        m = re.search(
+            r"\b(?:press(?: the)?\s+(.+?)(?:\s+key)?|"
+            r"send(?: the)?\s+(.+?)\s+(?:key|keystroke|shortcut))$",
+            text, re.IGNORECASE)
+        keys = next((group.strip() for group in m.groups() if group), "") if m else ""
+        if keys:
+            return packet("send keystroke", "send_keystroke",
+                          {"keys": keys}, "")
+
         # --- media transport ---
         if re.search(r"\b(next|skip)\b.*\b(track|song)\b", t) or \
                 re.search(r"\bnext track\b", t):
@@ -125,18 +187,76 @@ class LocalIntentEngine:
         # --- volume ---
         if re.search(r"\b(mute|unmute)\b", t):
             return packet("toggle mute", "mute_toggle", {}, "")
-        if re.search(r"\b(volume up|louder|raise (?:the )?volume|increase (?:the )?volume|turn (?:it |the volume )?up)\b", t):
+        if re.search(
+                r"\b(volume up|louder|raise (?:the )?volume|"
+                r"increase (?:the )?volume|turn (?:it |the volume )?up)\b", t):
             return packet("volume up", "volume_up", {}, "")
-        if re.search(r"\b(volume down|quieter|softer|lower (?:the )?volume|decrease (?:the )?volume|turn (?:it |the volume )?down)\b", t):
+        if re.search(
+                r"\b(volume down|quieter|softer|lower (?:the )?volume|"
+                r"decrease (?:the )?volume|turn (?:it |the volume )?down)\b", t):
             return packet("volume down", "volume_down", {}, "")
 
         # --- window state ---
-        if re.search(r"\bminimi[sz]e\b", t):
-            return packet("minimize window", "minimize_window", {}, "")
-        if re.search(r"\bmaximi[sz]e\b", t):
-            return packet("maximize window", "maximize_window", {}, "")
-        if re.search(r"\brestore (?:the )?window\b", t):
-            return packet("restore window", "restore_window", {}, "")
+        m = re.search(r"\b(?:focus|switch to)(?: the)? window\s+(.+)$",
+                      text, re.IGNORECASE)
+        if m:
+            return packet("focus window", "focus_window",
+                          {"title": m.group(1).strip()}, "")
+        m = re.search(r"\bclose(?: the)? (?:current |active )?window(?:\s+(.+))?$",
+                      text, re.IGNORECASE)
+        if m:
+            params = {"title": m.group(1).strip()} if m.group(1) else {}
+            return packet("close window", "close_window", params, "")
+        for pattern, thought, intent_type in (
+            (r"\bminimi[sz]e(?: the)?(?: window)?(?:\s+(.+))?$",
+             "minimize window", "minimize_window"),
+            (r"\bmaximi[sz]e(?: the)?(?: window)?(?:\s+(.+))?$",
+             "maximize window", "maximize_window"),
+            (r"\brestore(?: the)? window(?:\s+(.+))?$",
+             "restore window", "restore_window"),
+        ):
+            m = re.search(pattern, text, re.IGNORECASE)
+            if m:
+                params = {"title": m.group(1).strip()} if m.group(1) else {}
+                return packet(thought, intent_type, params, "")
+
+        # --- workspace file management (all paths remain sandboxed) --------
+        m = re.search(r"\b(?:append|add)\s+(.+?)\s+to(?: the)? file\s+(.+)$",
+                      text, re.IGNORECASE)
+        if m:
+            return packet("append workspace file", "write_file", {
+                "text": m.group(1).strip(), "path": m.group(2).strip(),
+                "append": True}, "")
+        m = re.search(r"\b(?:write|save)\s+(.+?)\s+to(?: the)? file\s+(.+)$",
+                      text, re.IGNORECASE)
+        if m:
+            return packet("write workspace file", "write_file", {
+                "text": m.group(1).strip(), "path": m.group(2).strip(),
+                "append": False}, "")
+        m = re.search(r"\bread(?: the)? file\s+(.+)$", text, re.IGNORECASE)
+        if m:
+            return packet("read workspace file", "read_file",
+                          {"path": m.group(1).strip()}, "")
+        m = re.search(r"\bcreate(?: a)? folder\s+(.+)$", text, re.IGNORECASE)
+        if m:
+            return packet("create workspace folder", "create_folder",
+                          {"path": m.group(1).strip()}, "")
+        m = re.search(r"\bdelete(?: the)? (?:file|folder|path)\s+(.+)$",
+                      text, re.IGNORECASE)
+        if m:
+            return packet("delete workspace path", "delete_path",
+                          {"path": m.group(1).strip()}, "")
+        m = re.search(r"\bmove(?: the)? (?:file|folder)?\s*(.+?)\s+to\s+(.+)$",
+                      text, re.IGNORECASE)
+        if m:
+            return packet("move workspace path", "move_path", {
+                "source": m.group(1).strip(),
+                "destination": m.group(2).strip()}, "")
+        m = re.search(r"\bopen(?: the)? folder(?:\s+(.+))?$", text,
+                      re.IGNORECASE)
+        if m:
+            return packet("open workspace folder", "open_folder",
+                          {"path": (m.group(1) or "").strip()}, "")
 
         # --- app launcher ---
         m = re.search(r"\b(open|launch|start|run)\s+(.+)", t)

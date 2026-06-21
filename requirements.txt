@@ -34,3 +34,4 @@ keyring>=24
 # --- Skills ---
 psutil>=5.9          # SystemInfoSkill
 requests>=2.31       # WebSearchSkill
+Pillow>=10.0         # ScreenshotSkill (optional screen capture)

@@ -38,6 +38,10 @@ vad_silence_ms = 800     # trailing silence that ends an utterance
 # --- Wake word --------------------------------------------------------------
 wake_word = "Axon"
 require_wake_word = true  # ignore speech until "Axon" is heard
+wake_preroll_ms = 1800    # in-memory audio replay prevents same-breath clipping
+
+# --- In-app data ------------------------------------------------------------
+weather_default_location = "London"  # used when no place is spoken
 
 # --- Text to speech ---------------------------------------------------------
 tts_rate = 178           # words per minute

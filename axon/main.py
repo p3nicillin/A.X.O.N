@@ -118,7 +118,7 @@ def main() -> None:
     crash = CrashReporter(config, audit.session_id)
     crash.install()
 
-    registry = SkillRegistry(config.disabled_skills).discover()
+    registry = SkillRegistry(config.disabled_skills, config=config).discover()
     tts = TtsEngine(config, bus)
     stt = SttEngine(config)
     audio = AudioInput(config, bus, stt)

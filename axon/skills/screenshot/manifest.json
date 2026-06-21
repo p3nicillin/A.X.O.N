@@ -1,0 +1,11 @@
+{
+  "name": "ScreenshotSkill",
+  "version": "1.0.0",
+  "description": "Captures the desktop to a PNG inside the sandbox workspace.",
+  "intents": ["capture_screenshot"],
+  "intent_params": {
+    "capture_screenshot": ["filename"]
+  },
+  "sensitive": true,
+  "author": "core"
+}

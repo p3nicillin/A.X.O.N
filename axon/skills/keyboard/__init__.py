@@ -1,0 +1,1 @@
+"""Confirmation-gated keyboard skill."""

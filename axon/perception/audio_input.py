@@ -24,6 +24,7 @@ from __future__ import annotations
 import queue
 import threading
 import time
+from collections import deque
 
 from ..config import Config
 from ..core.event_bus import Event, EventBus
@@ -58,6 +59,8 @@ class AudioInput:
         self._cmd_active = False
         self._silence = 0
         self._deadline = 0.0
+        preroll_blocks = max(1, int(config.wake_preroll_ms / _BLOCK_MS))
+        self._wake_preroll: deque[bytes] = deque(maxlen=preroll_blocks)
         # legacy-mode vars
         self._speaking = False
 
@@ -134,12 +137,17 @@ class AudioInput:
         self._cmd_active = False
         self._silence = 0
         self._speaking = False
+        self._wake_preroll.clear()
         self.stt.reset_wake()
         self.stt.reset_command()
 
     # -- wake-spotter state machine -----------------------------------------
     def _spotter_step(self, pcm: bytes, rms: float) -> None:
         if self._mode == "wake":
+            # The wake recogniser needs several frames to decide. Retain those
+            # frames so the command recogniser can start at the beginning of
+            # "AXON, <command>" rather than after the decision point.
+            self._wake_preroll.append(pcm)
             final = self.stt.accept_wake(pcm)
             text = self.stt.wake_text(final)
             if self.config.wake_word.lower() in text.lower().split():
@@ -157,14 +165,20 @@ class AudioInput:
 
         if self._cmd_active and self._silence >= self._silence_limit:
             self._finish_command()
-        elif not self._cmd_active and now >= self._deadline:
-            self._finish_command(wake_only=True)   # woke, but nothing followed
+        elif now >= self._deadline:
+            self._finish_command(wake_only=not self._cmd_active)
 
     def _enter_command_mode(self) -> None:
         self._mode = "command"
-        self._cmd_active = False
         self._silence = 0
         self.stt.reset_command()
+        for buffered_pcm in self._wake_preroll:
+            self.stt.accept_command(buffered_pcm)
+        # Wake detection itself proves this utterance is active. This also lets
+        # VAD finalise a command already present in replay if detection arrived
+        # after the speaker had finished the short phrase.
+        self._cmd_active = True
+        self._wake_preroll.clear()
         self._deadline = time.monotonic() + self.config.active_listen_timeout
         self.bus.publish(Event.WAKE_WORD)
         self.bus.publish(Event.SPEECH_START)
@@ -174,6 +188,7 @@ class AudioInput:
         self._mode = "wake"
         self._cmd_active = False
         self._silence = 0
+        self._wake_preroll.clear()
         self.stt.reset_wake()
         self.bus.publish(Event.SPEECH_END)
         if wake_only or not text:

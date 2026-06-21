@@ -6,6 +6,7 @@
   "intent_params": {
     "set_clipboard": ["text"]
   },
+  "sensitive_intents": ["set_clipboard"],
   "sensitive": false,
   "author": "core"
 }

@@ -96,7 +96,8 @@ class LocalLLMBackend(IntentBackend):
         messages += context.as_messages()
         messages.append({"role": "user", "content": transcript})
 
-        max_tokens = 256
+        max_tokens = max(256, min(1024, int(getattr(
+            self.config, "ai_max_tokens", 512))))
         try:
             raw = self.runtime.chat(messages, schema=schema,
                                     temperature=self.temperature,

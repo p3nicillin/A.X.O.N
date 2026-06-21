@@ -1,13 +1,19 @@
 {
   "name": "FileSystemSkill",
   "version": "1.0.0",
-  "description": "Restricted, sandboxed file operations inside a single workspace folder.",
-  "intents": ["list_files", "find_file", "open_folder"],
+  "description": "Reads and manages files inside the sandboxed AXON workspace.",
+  "intents": ["list_files", "find_file", "read_file", "write_file", "create_folder", "move_path", "delete_path", "open_folder"],
   "intent_params": {
     "list_files": ["path"],
     "find_file": ["query"],
+    "read_file": ["path"],
+    "write_file": ["path", "text", "append"],
+    "create_folder": ["path"],
+    "move_path": ["source", "destination"],
+    "delete_path": ["path"],
     "open_folder": ["path"]
   },
-  "sensitive": true,
+  "sensitive_intents": ["write_file", "create_folder", "move_path", "delete_path"],
+  "sensitive": false,
   "author": "core"
 }

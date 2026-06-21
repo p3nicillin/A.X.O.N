@@ -48,6 +48,17 @@ def test_non_destructive_executes_without_confirmation():
     assert orch._pending is None
 
 
+def test_per_intent_sensitive_clipboard_write_requires_confirmation():
+    orch, tts, logs = build()
+    orch.submit_text("copy Hello World to the clipboard")
+    assert wait(lambda: orch._pending is not None)
+    assert logs == []
+    orch.submit_text("no")
+    assert wait(lambda: logs)
+    assert logs[-1]["intent"] == "set_clipboard"
+    assert logs[-1]["success"] is False
+
+
 def test_destructive_requires_confirmation_then_executes():
     orch, tts, logs = build()
     orch.submit_text("clear my notes")

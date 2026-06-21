@@ -1,0 +1,12 @@
+{
+  "name": "KeyboardSkill",
+  "version": "1.0.0",
+  "description": "Types bounded text or sends an allow-listed keyboard shortcut.",
+  "intents": ["type_text", "send_keystroke"],
+  "intent_params": {
+    "type_text": ["text"],
+    "send_keystroke": ["keys"]
+  },
+  "sensitive": true,
+  "author": "core"
+}

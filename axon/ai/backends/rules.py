@@ -23,10 +23,16 @@ from .base import IntentBackend, IntentSpec
 FAST_PATH_INTENTS = frozenset({
     "get_time", "get_date", "system_info",
     "open_app", "close_app", "read_notes", "clear_notes", "list_files",
+    "read_file", "write_file", "create_folder", "move_path", "delete_path",
+    "open_folder",
     "play_pause", "next_track", "previous_track",
     "volume_up", "volume_down", "mute_toggle",
-    "minimize_window", "maximize_window", "restore_window",
+    "focus_window", "minimize_window", "maximize_window", "restore_window",
+    "close_window",
     "read_clipboard",
+    "capture_screenshot",
+    "get_weather",
+    "calculate",
 })
 
 

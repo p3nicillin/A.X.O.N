@@ -92,6 +92,9 @@
   .greeting{margin-top:9px;font-size:13px;color:var(--muted);max-width:250px;line-height:1.5}
   .nametag{position:absolute;bottom:7%;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:10px;
     letter-spacing:.5em;color:var(--accent2);z-index:3;transition:color .6s}
+  .quickactions{position:absolute;bottom:11%;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:4}
+  .quickactions button{border:1px solid var(--border);background:rgba(12,11,28,.72);color:var(--muted);border-radius:12px;padding:5px 8px;font:9px var(--mono);letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+  .quickactions button:hover,.quickactions button:focus{color:var(--accent);border-color:var(--accent);outline:none}
   .reason{position:absolute;left:5%;bottom:13%;width:230px;z-index:3;display:flex;flex-direction:column;gap:7px;
     opacity:0;transition:opacity .4s}
   .reason.show{opacity:1}
@@ -115,6 +118,10 @@
   .typing{display:flex;gap:4px;padding:11px 13px}
   .typing i{width:6px;height:6px;border-radius:50%;background:var(--accent2);animation:blink 1.2s infinite}
   .typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+  .resultcard{align-self:flex-start;max-width:92%;border:1px solid rgba(95,230,255,.28);border-left:3px solid var(--accent);border-radius:10px;background:rgba(50,55,110,.16);padding:10px 12px;animation:msgin .35s ease both}
+  .resultcard.fail{border-left-color:#ff7b91}.resultcard .rh{display:flex;justify-content:space-between;gap:10px;font:9px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+  .resultcard .rs{font-size:12px;line-height:1.45;color:var(--text);margin-top:6px;white-space:pre-wrap;word-break:break-word}
+  .resultcard .rd{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}.resultcard .rd span{font:9px var(--mono);color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:3px 5px}
 
   .drawer{border-top:1px solid var(--border);background:rgba(10,9,24,.4)}
   .tabs{display:flex;gap:4px;padding:10px 14px 0}
@@ -166,6 +173,7 @@
   .send:hover{filter:brightness(1.12)}
   .badge{display:flex;flex-direction:column;align-items:flex-end;gap:4px;font-family:var(--mono);flex:none}
   .badge .l1{font-size:10px;letter-spacing:.18em;color:var(--faint)}.badge .l2{font-size:13px;color:var(--accent)}
+  body.dev-hidden .bot .field,body.dev-hidden .bot .badge{display:none}
 
   #boot{position:fixed;inset:0;z-index:50;background:var(--bg2);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;transition:opacity .8s}
   #boot.done{opacity:0;pointer-events:none}
@@ -216,7 +224,7 @@
     <div class="gauge"><div class="row"><span class="name"><span class="ric"></span>CPU</span><span class="val"><b id="cpu-v">--</b>%</span></div><div class="bar"><i id="cpu-b" style="width:0"></i></div></div>
     <div class="gauge"><div class="row"><span class="name"><span class="ric"></span>Memory</span><span class="val"><b id="mem-v">--</b>%</span></div><div class="bar"><i id="mem-b" style="width:0"></i></div></div>
     <div class="gauge"><div class="row"><span class="name"><span class="ric"></span>Disk</span><span class="val"><b id="disk-v">--</b>%</span></div><div class="bar"><i id="disk-b" style="width:0"></i></div></div>
-    <div class="gauge"><div class="row"><span class="name"><span class="ric"></span>Battery</span><span class="val"><b id="battery-v">N/A</b><span id="battery-unit"></span></span></div><div class="bar warn"><i id="battery-b" style="width:0"></i></div></div>
+    <div class="gauge" id="battery-gauge" style="display:none"><div class="row"><span class="name"><span class="ric"></span>Battery</span><span class="val"><b id="battery-v">--</b><span id="battery-unit">%</span></span></div><div class="bar warn"><i id="battery-b" style="width:0"></i></div></div>
     <div class="ptitle" style="margin-top:4px"><span class="lbl">Throughput</span></div>
     <div class="net"><div><div class="k">▲ Out</div><div class="v" id="up">0.0<small> Mb/s</small></div></div><div><div class="k">▼ In</div><div class="v" id="down">0.0<small> Mb/s</small></div></div></div>
     <canvas id="spark" class="spark"></canvas>
@@ -230,13 +238,14 @@
     </div>
     <div class="reason" id="reason"><div class="rh">Reasoning</div><div id="reason-steps"></div></div>
     <div class="core-readout"><div class="status" id="status">STANDBY</div><div class="greeting" id="greeting">Awaiting your command.</div></div>
+    <div class="quickactions" aria-label="Quick commands"><button data-command="what is the weather">Weather</button><button data-command="system status">System</button><button data-command="what time is it">Time</button><button data-command="list my files">Files</button></div>
     <div class="nametag">SYNAPTIC&nbsp;&nbsp;CORE</div>
   </main>
 
   <aside class="panel right reveal" style="animation-delay:.3s">
     <span class="corner tl"></span><span class="corner tr"></span>
     <div class="ph"><span class="lbl">Conversation</span><span class="lbl" id="session-id">session pending</span></div>
-    <div class="log" id="log"></div>
+    <div class="log" id="log" role="log" aria-live="polite" aria-label="AXON conversation"></div>
     <div class="drawer">
       <div class="tabs"><div class="tab on" data-t="mem">Memory</div><div class="tab" data-t="agents">Agents</div><div class="tab" data-t="skills">Skills</div><div class="tab" data-t="ai">AI</div><div class="tab" data-t="audit">Audit</div><div class="tab" data-t="voice">Voice</div><div class="tab" data-t="diag">Diag</div></div>
       <div class="tabbody" id="tab-mem"></div>
@@ -254,7 +263,7 @@
     <div class="mic" id="mic" role="button" tabindex="0" aria-label="Toggle voice input"><div class="micon" id="micon"></div></div>
     <div class="field">
       <div class="toprow"><span class="lbl" id="wave-label">Acoustic input · muted</span><canvas id="wave-strip"></canvas></div>
-      <div class="inputwrap"><input id="cmd" type="text" placeholder="Speak with AXON…  (try “status report”)" autocomplete="off"><button class="send" id="send">SEND</button></div>
+      <div class="inputwrap"><input id="cmd" type="text" aria-label="Command AXON" placeholder="Speak with AXON…  (try “status report”)" autocomplete="off"><button class="send" id="send">SEND</button></div>
     </div>
     <div class="badge"><span class="l1">SYNAPTIC BUILD</span><span class="l2" id="build-version">pending</span></div>
   </footer>
@@ -269,6 +278,8 @@ function fit(c){const r=c.getBoundingClientRect();c.width=Math.max(1,r.width*dpr
 
 let connected=false,listening=false,amp=0,ampTarget=0.12,thinking=0,t0=Date.now(),lastT=performance.now();
 const C={cpu:null,mem:null,disk:null,battery:null,up:null,down:null,requests:0,latency:null,uptime_seconds:null};
+const LIVE={cpu:0,mem:0,net:0,latency:0,event:0,activity:0,lastRequests:0};
+function signalLive(energy){LIVE.event=Math.max(LIVE.event,clamp(Number(energy)||0,0,1));}
 
 /* ---------- themes ---------- */
 const THEMES={
@@ -323,9 +334,13 @@ function updateBrain(dt,time){
   par.x=lerp(par.x,par.tx,0.06);par.y=lerp(par.y,par.ty,0.06);
   for(const n of NODES){const px=par.x*(n.z-0.5)*26,py=par.y*(n.z-0.5)*26;
     n.x=n.bx+px+Math.sin(time*0.0005+n.phase)*5;n.y=n.by+py+Math.cos(time*0.0006+n.phase)*5;}
-  spawnAcc+=dt;const interval=(listening?0.07:0.16)/(1+thinking*1.4);
-  if(spawnAcc>interval){spawnAcc=0;const s=NODES[Math.floor(Math.random()*NODES.length)];s.act=1;emit(s,1);}
-  for(let i=PULSES.length-1;i>=0;i--){const p=PULSES[i];p.t+=p.sp*dt*1.5;
+  const audio=listening?amp:0;const work=clamp(thinking*.75+LIVE.event,0,1);
+  const target=clamp(LIVE.cpu*.36+LIVE.mem*.10+LIVE.net*.30+audio*.55+work*.72,0,1);
+  LIVE.activity=lerp(LIVE.activity,target,Math.min(1,dt*5));LIVE.event*=Math.pow(.22,dt);
+  spawnAcc+=dt;const interval=lerp(1.4,.055,LIVE.activity);
+  if(spawnAcc>interval&&LIVE.activity>.015){spawnAcc=0;const count=1+Math.floor(LIVE.activity*3);
+    for(let i=0;i<count;i++){const s=NODES[Math.floor(Math.random()*NODES.length)];s.act=Math.max(s.act,LIVE.activity);emit(s,.18+LIVE.activity*.82);}}
+  for(let i=PULSES.length-1;i>=0;i--){const p=PULSES[i];p.t+=p.sp*dt*(.65+LIVE.activity*2.1);
     if(p.t>=1){p.to.act=Math.max(p.to.act,p.en);if(p.en>0.34&&Math.random()<0.6)emit(p.to,p.en*0.72);PULSES.splice(i,1);}}
   for(const n of NODES)n.act*=Math.pow(0.16,dt);
   thinking=Math.max(0,thinking-dt*0.5);
@@ -345,7 +360,7 @@ function drawBrain(time){if(Math.abs(core.getBoundingClientRect().width-W)>2)bui
     cx.fillStyle=pg;cx.beginPath();cx.arc(pt.x,pt.y,8,0,7);cx.fill();
     cx.fillStyle='rgba(255,255,255,'+(0.5+p.en*0.4)+')';cx.beginPath();cx.arc(pt.x,pt.y,1.8,0,7);cx.fill();}
   const sorted=NODES.slice().sort((a,b)=>a.z-b.z);
-  for(const n of sorted){const gl=Math.max(n.act,0.16+0.12*Math.sin(time*0.002+n.phase));const r=n.r*(0.7+n.z*0.6)*(1+gl*0.5);
+  for(const n of sorted){const baseline=.04+LIVE.mem*.14+LIVE.activity*.12;const gl=Math.max(n.act,baseline);const r=n.r*(0.7+n.z*0.6)*(1+gl*0.5);
     const ng=cx.createRadialGradient(n.x,n.y,0,n.x,n.y,r*3.6);
     ng.addColorStop(0,'rgba('+ac[0]+','+ac[1]+','+ac[2]+','+(0.3+gl*0.55)*(0.5+n.z*0.5)+')');ng.addColorStop(1,'rgba('+ac[0]+','+ac[1]+','+ac[2]+',0)');
     cx.fillStyle=ng;cx.beginPath();cx.arc(n.x,n.y,r*3.6,0,7);cx.fill();
@@ -382,10 +397,10 @@ buildBrain();requestAnimationFrame(loop);
 function metric(value,id,bar){const ok=Number.isFinite(value);$(id).textContent=ok?Math.round(value):'--';$(bar).style.width=(ok?clamp(value,0,100):0)+'%';}
 function duration(total){if(!Number.isFinite(total))return '--:--:--';const s=Math.max(0,Math.floor(total)),p=n=>String(n).padStart(2,'0');return p(Math.floor(s/3600))+':'+p(Math.floor(s/60)%60)+':'+p(s%60);}
 function rate(value){return Number.isFinite(value)?value.toFixed(1)+'<small> Mb/s</small>':'--';}
-function renderTelemetry(){metric(C.cpu,'#cpu-v','#cpu-b');metric(C.mem,'#mem-v','#mem-b');metric(C.disk,'#disk-v','#disk-b');const hasBattery=Number.isFinite(C.battery);$('#battery-v').textContent=hasBattery?Math.round(C.battery):'N/A';$('#battery-unit').textContent=hasBattery?'%':'';$('#battery-b').style.width=(hasBattery?clamp(C.battery,0,100):0)+'%';
+function renderTelemetry(){metric(C.cpu,'#cpu-v','#cpu-b');metric(C.mem,'#mem-v','#mem-b');metric(C.disk,'#disk-v','#disk-b');const hasBattery=Number.isFinite(C.battery);$('#battery-gauge').style.display=hasBattery?'block':'none';if(hasBattery){$('#battery-v').textContent=Math.round(C.battery);$('#battery-b').style.width=clamp(C.battery,0,100)+'%';}
   $('#up').innerHTML=rate(C.up);$('#down').innerHTML=rate(C.down);$('#proc').textContent=Number.isFinite(C.requests)?Math.round(C.requests):'--';
   $('#lat').textContent=Number.isFinite(C.latency)&&C.latency>0?Math.round(C.latency)+'ms':'--';$('#uptime').textContent=duration(C.uptime_seconds);
-  $('#load').textContent='live '+new Date().toLocaleTimeString('en-GB',{hour12:false});if(Number.isFinite(C.down)){hist.push(C.down);if(hist.length>40)hist.shift();}drawSpark();}
+  const net=(Number(C.up)||0)+(Number(C.down)||0);$('#load').textContent='live · cpu '+(Number.isFinite(C.cpu)?Math.round(C.cpu):'--')+'% · net '+net.toFixed(1)+' Mb/s';if(Number.isFinite(C.down)){hist.push(C.down);if(hist.length>40)hist.shift();}drawSpark();}
 
 setInterval(()=>{$('#clock').textContent=new Date().toLocaleTimeString('en-GB',{hour12:false});},1000);
 
@@ -394,6 +409,7 @@ const log=$('#log'); let typingNode=null;
 function addMsg(who,text,role){const m=document.createElement('div');m.className='msg '+(role||'ai');
   const w=document.createElement('span');w.className='who';w.textContent=who;const t=document.createElement('div');t.className='txt';t.textContent=text;
   m.appendChild(w);m.appendChild(t);log.appendChild(m);log.scrollTop=log.scrollHeight;return m;}
+function showResult(result){if(!result)return;const card=document.createElement('div');card.className='resultcard'+(result.ok?'':' fail');const head=document.createElement('div');head.className='rh';const title=document.createElement('span');title.textContent=String(result.skill||'result').replace(/Skill$/,'');const state=document.createElement('span');state.textContent=result.ok?'live result':'failed';head.append(title,state);const summary=document.createElement('div');summary.className='rs';summary.textContent=result.summary||'';card.append(head,summary);const data=result.data||{},details=[];for(const key of ['location','path','source','result','bytes'])if(data[key]!=null)details.push(key+' · '+data[key]);if(Array.isArray(data.entries))details.push(data.entries.length+' entries');if(Array.isArray(data.hits))details.push(data.hits.length+' matches');if(Array.isArray(data.forecast)&&data.forecast.length>1)details.push((data.forecast.length-1)+' forecast days');if(details.length){const row=document.createElement('div');row.className='rd';details.forEach(value=>{const chip=document.createElement('span');chip.textContent=value;row.appendChild(chip);});card.appendChild(row);}log.appendChild(card);log.scrollTop=log.scrollHeight;signalLive(result.ok ? .8 : .5);}
 function showTyping(){if(typingNode)return;typingNode=document.createElement('div');typingNode.className='msg ai';
   typingNode.innerHTML='<span class="who">AXON</span><div class="txt typing"><i></i><i></i><i></i></div>';log.appendChild(typingNode);log.scrollTop=log.scrollHeight;}
 function hideTyping(){if(typingNode){typingNode.remove();typingNode=null;}}
@@ -424,6 +440,7 @@ function setAgents(list){agBody.innerHTML='';list.forEach(a=>{const el=document.
   el.querySelector('.an').textContent=a.name;el.querySelector('.as').textContent=a.status||'idle';agBody.appendChild(el);});}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function pills(list){return (list||[]).map(x=>'<span class="pill">'+esc(x)+'</span>').join('');}
+function skillPills(skill){const guarded=new Set(skill.sensitive_intents||[]);return (skill.intents||[]).map(x=>'<span class="pill">'+esc(x)+(skill.sensitive||guarded.has(x)?' · confirm':'')+'</span>').join('');}
 function kv(obj){return '<div class="kv">'+Object.entries(obj||{}).map(([k,v])=>'<span class="k">'+esc(k)+'</span><span>'+esc(Array.isArray(v)?v.join(' → '):v)+'</span>').join('')+'</div>';}
 function controlMessage(id,text,error=false){const el=$(id);if(!el)return;el.textContent=text||'';el.classList.toggle('err',!!error);}
 async function refreshPanel(){if(connected&&bridge())setPanelData(await window.pywebview.api.get_panel_data());}
@@ -431,7 +448,7 @@ async function loadAudit(reset=false){if(!connected||!bridge())return;if(reset)A
   try{const page=await window.pywebview.api.get_audit_history(offset,50);AUDIT.records=AUDIT.records.concat(page.records||[]);AUDIT.next_offset=page.next_offset;AUDIT.total=page.total||0;AUDIT.loaded=true;renderPanels();}catch(e){controlMessage('#audit-msg','Audit history unavailable',true);}}
 function renderPanels(){
   setMemories(PANEL.memory||[]);setAgents(PANEL.agents||[]);
-  panelBodies.skills.innerHTML=(PANEL.skills||[]).map(s=>'<div class="skillrow"><div class="skilltop"><b>'+esc(s.name)+'</b><small>'+esc(s.sensitive?'sensitive':'standard')+'</small><button class="toggle '+(s.enabled?'on':'')+'" data-skill="'+esc(s.name)+'" aria-label="Toggle '+esc(s.name)+'"></button></div><div>'+esc(s.description)+'</div><div>'+pills(s.intents)+'</div></div>').join('')||'<div class="mem">No skills discovered.</div>';
+  panelBodies.skills.innerHTML=(PANEL.skills||[]).map(s=>{const level=s.sensitive?'sensitive':(s.sensitive_intents||[]).length?'mixed':'standard';return '<div class="skillrow"><div class="skilltop"><b>'+esc(s.name)+'</b><small>'+esc(level)+'</small><button class="toggle '+(s.enabled?'on':'')+'" data-skill="'+esc(s.name)+'" aria-label="Toggle '+esc(s.name)+'"></button></div><div>'+esc(s.description)+'</div><div>'+skillPills(s)+'</div></div>';}).join('')||'<div class="mem">No skills discovered.</div>';
   const backends=Object.entries(PANEL.ai?.health?.backends||{}).map(([name,data])=>name+': '+(data.available?'online':'offline')+' ('+(data.model||'unknown')+')');const configured=PANEL.status?.configured_engine||'local';const cloudReady=!!PANEL.ai?.health?.backends?.cloud?.available;const locked=new Set(PANEL.settings?.locked||[]);
   panelBodies.ai.innerHTML=kv({configured,active:PANEL.ai?.health?.active||'rules',chain:(PANEL.ai?.health?.chain||[]).concat(['rules']).join(' → '),total:PANEL.ai?.metrics?.total||0,fast_path_hits:PANEL.ai?.metrics?.fast_path_hits||0,fallback_to_rules:PANEL.ai?.metrics?.fallback_to_rules||0})+'<div class="modes">'+['local','rules','cloud'].map(mode=>'<button class="modebtn '+(configured===mode?'on':'')+'" data-engine="'+mode+'" '+(locked.has('ai_engine')||mode==='cloud'&&!cloudReady?'disabled':'')+'>'+mode+'</button>').join('')+'</div><div>'+pills(backends)+'</div><div class="controlmsg" id="ai-msg">'+(locked.has('ai_engine')?'Locked by environment':'')+'</div>';
   const logs=(PANEL.audit?.logs||[]).slice(-40).reverse().map(l=>'<div class="auditrow"><div class="m">'+esc(l.message)+'</div><div class="meta">'+esc(l.ts)+' · '+esc(l.source)+' · '+esc(l.level)+'</div></div>').join('');
@@ -470,9 +487,12 @@ function readMic(){if(!an)return;an.getByteTimeDomainData(micData);let s=0;for(l
 
 /* ---------- input wiring ---------- */
 function bridge(){return window.pywebview&&window.pywebview.api;}
-function submit(){const v=$('#cmd').value.trim();if(!v)return;addMsg('You',v,'me');$('#cmd').value='';
+function submitCommand(v){v=String(v||'').trim();if(!v)return;addMsg('You',v,'me');
   if(connected&&bridge()){showTyping();window.pywebview.api.command(v);}else addMsg('AXON','Project bridge unavailable. Start AXON through run.py.','ai');}
+function submit(){const v=$('#cmd').value.trim();if(!v)return;$('#cmd').value='';submitCommand(v);}
 $('#send').onclick=submit;$('#cmd').addEventListener('keydown',e=>{if(e.key==='Enter')submit();});
+document.querySelectorAll('.quickactions button').forEach(button=>button.onclick=()=>submitCommand(button.dataset.command));
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&connected&&bridge()){e.preventDefault();window.pywebview.api.interrupt();hideTyping();}else if(e.key==='F2'){e.preventDefault();document.body.classList.toggle('dev-hidden');}});
 async function toggleMic(){
   if(connected&&bridge()){window.pywebview.api.toggle_listening();return;}
   addMsg('AXON','Project microphone bridge unavailable. Start AXON through run.py.','ai');}
@@ -492,18 +512,19 @@ addEventListener('resize',()=>{sx=fit(stars);buildParts();stx=fit(strip);spx=fit
 
 /* ---------- public API (window.AXON) ---------- */
 const API={
-  addMessage(who,text,role){hideTyping();return addMsg(who||'AXON',text,role||'ai');},
-  thinking(){showTyping();},stopThinking(){hideTyping();},
-  reply(text){hideTyping();addMsg('AXON',text,'ai');},
+  addMessage(who,text,role){hideTyping();signalLive(.55);return addMsg(who||'AXON',text,role||'ai');},
+  thinking(){signalLive(1);showTyping();},stopThinking(){hideTyping();},
+  reply(text){signalLive(.8);hideTyping();addMsg('AXON',text,'ai');},
   reason(steps){reason(Array.isArray(steps)?steps:[String(steps)]);},
-  pushThought(text){pushThought(text);},
-  setListening(on){applyListening(!!on);},
+  pushThought(text){signalLive(.9);pushThought(text);},
+  setListening(on){if(on)signalLive(.6);applyListening(!!on);},
   setAmplitude(v){if(!micOn)ampTarget=clamp(Number(v)||0,0,1);},
-  setStatus(s){$('#status').textContent=s;$('#core-health').textContent='CORE '+String(s||'unknown').toUpperCase();},setGreeting(s){$('#greeting').textContent=s;},setVoiceChip(s){$('#voice-chip').textContent=s;},
+  setStatus(s){const state=String(s||'unknown').toUpperCase();if(state==='PROCESSING')signalLive(1);else if(state==='SPEAKING')signalLive(.75);$('#status').textContent=s;$('#core-health').textContent='CORE '+state;},setGreeting(s){$('#greeting').textContent=s;},setVoiceChip(s){$('#voice-chip').textContent=s;},
   addMemory(text){addMemory(text);},setAgents(list){setAgents(list||[]);},
+  showResult(result){showResult(result);},
   setPanelData(data){setPanelData(data);},
   setTheme(name){const k=Object.keys(THEMES).indexOf(name);if(k>=0){themeIdx=k;setTheme(name);}},
-  setTelemetry(o){o=o||{};for(const k of ['cpu','mem','disk','battery','up','down','requests','latency','uptime_seconds'])if(Object.prototype.hasOwnProperty.call(o,k))C[k]=o[k]==null?null:Number(o[k]);renderTelemetry();},
+  setTelemetry(o){o=o||{};const previous=Number(C.requests)||0;for(const k of ['cpu','mem','disk','battery','up','down','requests','latency','uptime_seconds'])if(Object.prototype.hasOwnProperty.call(o,k))C[k]=o[k]==null?null:Number(o[k]);LIVE.cpu=clamp((Number(C.cpu)||0)/100,0,1);LIVE.mem=clamp((Number(C.mem)||0)/100,0,1);LIVE.net=clamp(Math.log1p((Number(C.up)||0)+(Number(C.down)||0))/4,0,1);LIVE.latency=clamp((Number(C.latency)||0)/3000,0,1);if((Number(C.requests)||0)>previous)signalLive(.65+LIVE.latency*.35);LIVE.lastRequests=Number(C.requests)||0;renderTelemetry();},
   boot(done){if(done)finishBoot();}
 };
 window.AXON=API;

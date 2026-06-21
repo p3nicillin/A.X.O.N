@@ -17,6 +17,8 @@ COMMAND_TYPES: dict[str, str] = {
     "open_app": "APP_CONTROL", "close_app": "APP_CONTROL",
     "system_info": "SYSTEM_STATUS",
     "web_search": "WEB_SEARCH",
+    "get_weather": "WEATHER",
+    "calculate": "UTILITY",
     "add_note": "NOTES", "read_notes": "NOTES", "clear_notes": "NOTES",
     "list_files": "FILE_ACCESS", "find_file": "FILE_ACCESS",
     "open_folder": "FILE_ACCESS",
@@ -26,6 +28,7 @@ COMMAND_TYPES: dict[str, str] = {
     "mute_toggle": "VOLUME_CONTROL",
     "minimize_window": "WINDOW_CONTROL", "maximize_window": "WINDOW_CONTROL",
     "restore_window": "WINDOW_CONTROL",
+    "focus_window": "WINDOW_CONTROL", "close_window": "WINDOW_CONTROL",
     "read_clipboard": "CLIPBOARD", "set_clipboard": "CLIPBOARD",
 }
 
@@ -99,7 +102,8 @@ class IntentPacket:
             intent=intent,
             response_text=str(data.get("response_text", "")),
             source_text=source_text,
-            needs_skill=intent.type not in ("none", "chat", "unknown", ""),
+            needs_skill=intent.type not in (
+                "none", "chat", "answer", "unknown", ""),
             confidence=float(data.get("confidence", confidence)),
         )
 

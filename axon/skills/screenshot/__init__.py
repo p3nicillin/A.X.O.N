@@ -1,0 +1,1 @@
+"""Sandboxed screenshot skill."""

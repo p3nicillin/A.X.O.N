@@ -1,0 +1,11 @@
+{
+  "name": "WeatherSkill",
+  "version": "1.0.0",
+  "description": "Returns current conditions and forecasts inside AXON without opening a browser.",
+  "intents": ["get_weather"],
+  "intent_params": {
+    "get_weather": ["location", "days"]
+  },
+  "sensitive": false,
+  "author": "core"
+}

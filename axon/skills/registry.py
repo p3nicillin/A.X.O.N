@@ -21,10 +21,11 @@ from .base import Skill, SkillManifest
 
 
 class SkillRegistry:
-    def __init__(self, disabled: list[str] | None = None) -> None:
+    def __init__(self, disabled: list[str] | None = None, config=None) -> None:
         self.skills: list[Skill] = []
         self._by_intent: dict[str, list[Skill]] = {}
         self._disabled = {s.lower() for s in (disabled or [])}
+        self._config = config
 
     def discover(self) -> "SkillRegistry":
         import axon.skills as pkg
@@ -54,10 +55,17 @@ class SkillRegistry:
                 author=raw.get("author", "core"),
                 intent_params={k: list(v) for k, v in
                                dict(raw.get("intent_params", {})).items()},
+                sensitive_intents=list(raw.get("sensitive_intents", [])),
             )
+            unknown_sensitive = set(manifest.sensitive_intents) - set(manifest.intents)
+            if unknown_sensitive:
+                raise ValueError("sensitive_intents must be declared intents: "
+                                 + ", ".join(sorted(unknown_sensitive)))
             handler = importlib.import_module(f"{base}.handler")
             skill: Skill = handler.SKILL
             skill.manifest = manifest          # authoritative metadata
+            if self._config is not None and hasattr(skill, "configure"):
+                skill.configure(self._config)
             self.skills.append(skill)
         except Exception as exc:
             print(f"[registry] failed to load skill '{package}': {exc!r}")
@@ -96,6 +104,14 @@ class SkillRegistry:
             return SkillResult(
                 ok=False, skill="router",
                 summary=f"No skill can handle intent '{intent.type}'.",
+            )
+        allowed = set(skill.manifest.params_for(intent.type))
+        unknown = set(intent.parameters) - allowed
+        if unknown:
+            return SkillResult(
+                ok=False, skill=skill.manifest.name,
+                summary=(f"Intent '{intent.type}' contains unsupported "
+                         f"parameter(s): {', '.join(sorted(unknown))}."),
             )
         try:
             return skill.execute(intent)
