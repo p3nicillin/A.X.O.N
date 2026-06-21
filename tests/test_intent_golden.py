@@ -43,6 +43,7 @@ GOLDEN = [
     ("delete file old.txt", "delete_path"),
     ("focus window Spotify", "focus_window"),
     ("close the current window", "close_window"),
+    ("open YouTube on Google Chrome", "open_website"),
     ("hello AXON", "chat"),
     ("thanks", "chat"),
     ("reverse the polarity of the neutron flow", "unknown"),

@@ -258,6 +258,20 @@ class LocalIntentEngine:
             return packet("open workspace folder", "open_folder",
                           {"path": (m.group(1) or "").strip()}, "")
 
+        # --- validated website navigation ---------------------------------
+        m = re.search(
+            r"\b(?:open|go to|visit)\s+"
+            r"(youtube|google|gmail|github|reddit|wikipedia|netflix|spotify|"
+            r"amazon|(?:https?://)?[a-z0-9.-]+\.[a-z]{2,}(?:/\S*)?)"
+            r"(?:\s+(?:on|in|with)\s+"
+            r"(google chrome|chrome|microsoft edge|edge|firefox))?[.!]?$",
+            text, re.IGNORECASE)
+        if m:
+            params = {"site": m.group(1).strip()}
+            if m.group(2):
+                params["browser"] = m.group(2).strip()
+            return packet("open website", "open_website", params, "")
+
         # --- app launcher ---
         m = re.search(r"\b(open|launch|start|run)\s+(.+)", t)
         if m:

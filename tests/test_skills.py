@@ -8,6 +8,8 @@ from axon.skills.registry import SkillRegistry
 from axon.skills.file_system import handler as file_handler
 from axon.skills.window_control import handler as window_handler
 from axon.skills.screenshot import handler as screenshot_handler
+from axon.skills.browser import handler as browser_handler
+from axon.skills.app_launcher import handler as app_handler
 
 
 def reg():
@@ -22,6 +24,7 @@ def test_all_skills_discovered():
             "ClipboardSkill", "ScreenshotSkill", "KeyboardSkill"} <= names
     assert "WeatherSkill" in names
     assert "CalculatorSkill" in names
+    assert "BrowserSkill" in names
 
 
 def test_manifest_contract():
@@ -64,6 +67,40 @@ def test_app_launcher_opens_non_aliased_app():
     # Whitelist removed: any named app passes through to the OS launcher.
     res = reg().execute(Intent(type="open_app", parameters={"app": "explorer"}))
     assert res.ok is True
+
+
+def test_app_launcher_rejects_malformed_multiword_name_without_shell(
+        monkeypatch):
+    calls = []
+    monkeypatch.setattr(app_handler.subprocess, "Popen",
+                        lambda *args, **kwargs: calls.append((args, kwargs)))
+
+    result = reg().execute(Intent(type="open_app", parameters={
+        "app": "youtube on google chrome"}))
+
+    assert result.ok is False
+    assert calls == []
+
+
+def test_browser_skill_opens_known_site_in_requested_browser(monkeypatch):
+    calls = []
+    monkeypatch.setattr(browser_handler, "_browser_executable",
+                        lambda browser: "C:/Chrome/chrome.exe")
+    monkeypatch.setattr(browser_handler.subprocess, "Popen",
+                        lambda args, **kwargs: calls.append((args, kwargs)))
+
+    result = reg().execute(Intent(type="open_website", parameters={
+        "site": "YouTube", "browser": "Google Chrome"}))
+
+    assert result.ok is True
+    assert calls[0][0] == ["C:/Chrome/chrome.exe", "https://www.youtube.com/"]
+
+
+def test_browser_skill_rejects_non_url_command_text():
+    result = reg().execute(Intent(type="open_website", parameters={
+        "site": "youtube on google chrome && whoami"}))
+
+    assert result.ok is False
 
 
 def test_filesystem_is_sandboxed():

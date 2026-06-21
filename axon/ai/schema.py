@@ -17,6 +17,7 @@ COMMAND_TYPES: dict[str, str] = {
     "open_app": "APP_CONTROL", "close_app": "APP_CONTROL",
     "system_info": "SYSTEM_STATUS",
     "web_search": "WEB_SEARCH",
+    "open_website": "WEB_NAVIGATION",
     "get_weather": "WEATHER",
     "calculate": "UTILITY",
     "add_note": "NOTES", "read_notes": "NOTES", "clear_notes": "NOTES",

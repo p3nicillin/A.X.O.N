@@ -1,0 +1,11 @@
+{
+  "name": "BrowserSkill",
+  "version": "1.0.0",
+  "description": "Opens known websites or validated HTTPS URLs in the default or requested browser.",
+  "intents": ["open_website"],
+  "intent_params": {
+    "open_website": ["site", "browser"]
+  },
+  "sensitive": false,
+  "author": "core"
+}

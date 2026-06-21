@@ -231,6 +231,7 @@ version, declared intents, skill/intent sensitivity) and a `handler.py` exposing
 |-------|---------|-------|
 | TimeDate | `get_time`, `get_date` | |
 | AppLauncher | `open_app`, `close_app` | named Windows applications; closing requires confirmation |
+| Browser | `open_website` | validated sites/URLs in the default or requested installed browser |
 | SystemInfo | `system_info` | also feeds the HUD gauges |
 | WebSearch | `web_search` | instant answer + browser fallback |
 | Weather | `get_weather` | current conditions/forecast remain inside AXON; no browser or API key |

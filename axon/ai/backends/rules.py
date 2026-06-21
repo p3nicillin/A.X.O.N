@@ -33,6 +33,7 @@ FAST_PATH_INTENTS = frozenset({
     "capture_screenshot",
     "get_weather",
     "calculate",
+    "open_website",
 })
 
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+from pathlib import Path
 
 from ...ai.schema import Intent, SkillResult
 from ..base import Skill
@@ -36,6 +37,7 @@ ALIASES: dict[str, str] = {
     "vscode": "code",
     "vs code": "code",
     "code": "code",
+    "visual studio": "devenv",
 }
 
 # friendly name -> process image name for closing
@@ -59,12 +61,24 @@ class AppLauncherSkill(Skill):
 
     def _open(self, name: str) -> SkillResult:
         # Known alias -> mapped target; otherwise launch the spoken name as-is.
-        target = ALIASES.get(name, name)
+        target = ALIASES.get(name)
+        if target is None:
+            if any(char.isspace() for char in name):
+                return self.fail(
+                    f"'{name}' is not a known application name.",
+                    speak="I couldn't identify that application, sir.")
+            target = shutil.which(name)
+            if target is None:
+                return self.fail(
+                    f"Application '{name}' was not found on PATH.",
+                    speak=f"I couldn't find {name}, sir.")
         try:
             if target.endswith(":"):  # ms-settings: style URI
                 os.startfile(target)  # type: ignore[attr-defined]
+            elif Path(target).is_file():
+                subprocess.Popen([target], close_fds=True)
             else:
-                # `start` resolves App Paths and PATH; shell-safe single arg
+                # Fixed core aliases may use Windows App Paths.
                 subprocess.Popen(["cmd", "/c", "start", "", target],
                                  close_fds=True)
             return self.ok(f"Opening {name}.", speak=f"Opening {name}, sir.",

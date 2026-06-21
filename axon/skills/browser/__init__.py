@@ -1,0 +1,1 @@
+"""Validated website navigation skill."""
