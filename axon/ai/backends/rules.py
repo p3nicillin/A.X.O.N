@@ -21,20 +21,22 @@ from .base import IntentBackend, IntentSpec
 # find_file) and the chat/unknown fallbacks are NOT here, so they still get the
 # LLM's better natural-language handling when one is available.
 FAST_PATH_INTENTS = frozenset({
-    "get_time", "get_date", "system_info",
+    "get_time", "get_date", "system_info", "list_running_apps",
+    "network_status",
     "open_app", "close_app", "read_notes", "clear_notes", "list_files",
     "read_file", "write_file", "create_folder", "move_path", "delete_path",
     "open_folder",
     "play_pause", "next_track", "previous_track",
     "volume_up", "volume_down", "mute_toggle",
     "focus_window", "minimize_window", "maximize_window", "restore_window",
-    "close_window",
+    "close_window", "get_active_window", "list_windows",
     "read_clipboard",
     "capture_screenshot",
     "get_weather",
     "calculate",
     "open_website",
     "search_browser", "open_browser",
+    "set_timer", "set_reminder", "list_reminders", "cancel_reminder",
 })
 
 

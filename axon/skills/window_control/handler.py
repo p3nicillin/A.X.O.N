@@ -25,6 +25,44 @@ _SPOKEN = {
 }
 
 
+def _window_title(hwnd: int) -> str:
+    import ctypes
+
+    user32 = ctypes.windll.user32
+    length = user32.GetWindowTextLengthW(hwnd)
+    if not length:
+        return ""
+    buffer = ctypes.create_unicode_buffer(length + 1)
+    user32.GetWindowTextW(hwnd, buffer, length + 1)
+    return buffer.value.strip()
+
+
+def _window_titles() -> list[str]:
+    import ctypes
+
+    user32 = ctypes.windll.user32
+    titles: list[str] = []
+    callback_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p,
+                                       ctypes.c_void_p)
+
+    def visit(hwnd, _lparam):
+        if user32.IsWindowVisible(hwnd):
+            title = _window_title(int(hwnd))
+            if title and title not in titles:
+                titles.append(title)
+        return True
+
+    user32.EnumWindows(callback_type(visit), 0)
+    return titles
+
+
+def _active_window_title() -> str:
+    import ctypes
+
+    hwnd = int(ctypes.windll.user32.GetForegroundWindow() or 0)
+    return _window_title(hwnd) if hwnd else ""
+
+
 def _resolve_window(title: str = "") -> int:
     import ctypes
 
@@ -67,12 +105,27 @@ def _apply_window_action(hwnd: int, action: str) -> bool:
 
 class WindowControlSkill(Skill):
     def execute(self, intent: Intent) -> SkillResult:
-        if intent.type not in {*_SW, "focus_window", "close_window"}:
+        if intent.type not in {*_SW, "focus_window", "close_window",
+                               "get_active_window", "list_windows"}:
             return self.fail(f"Unsupported window action '{intent.type}'.")
         if sys.platform != "win32":
             return self.fail("Window control is only available on Windows.",
                              speak="I can't manage windows on this system, sir.")
         try:
+            if intent.type == "get_active_window":
+                title = _active_window_title()
+                if not title:
+                    return self.fail("No active window was detected.")
+                return self.ok(title, speak=f"The active window is {title}, sir.",
+                               title=title)
+            if intent.type == "list_windows":
+                titles = _window_titles()[:30]
+                if not titles:
+                    return self.ok("No visible windows were detected.", windows=[])
+                return self.ok(" | ".join(titles),
+                               speak=("Open windows include "
+                                      + "; ".join(titles[:8]) + ", sir."),
+                               windows=titles, count=len(titles))
             title = str(intent.get("title", "")).strip()
             hwnd = _resolve_window(title)
             if not hwnd:

@@ -48,6 +48,15 @@ def test_non_destructive_executes_without_confirmation():
     assert orch._pending is None
 
 
+def test_due_reminder_is_spoken_inside_axon():
+    orch, tts, _logs = build()
+
+    orch.bus.publish(Event.REMINDER_DUE, {"label": "check the oven"})
+
+    assert any("reminder: check the oven" in text.lower()
+               for text in tts.spoken)
+
+
 def test_per_intent_sensitive_clipboard_write_requires_confirmation():
     orch, tts, logs = build()
     orch.submit_text("copy Hello World to the clipboard")

@@ -1,0 +1,14 @@
+{
+  "name": "ReminderSkill",
+  "version": "1.0.0",
+  "description": "Creates persistent local timers and reminders and raises their alerts inside AXON.",
+  "intents": ["set_timer", "set_reminder", "list_reminders", "cancel_reminder"],
+  "intent_params": {
+    "set_timer": ["seconds", "label"],
+    "set_reminder": ["seconds", "label"],
+    "list_reminders": [],
+    "cancel_reminder": ["identifier"]
+  },
+  "sensitive": false,
+  "author": "core"
+}

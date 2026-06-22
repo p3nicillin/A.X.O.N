@@ -10,6 +10,8 @@ from axon.skills.window_control import handler as window_handler
 from axon.skills.screenshot import handler as screenshot_handler
 from axon.skills.browser import handler as browser_handler
 from axon.skills.app_launcher import handler as app_handler
+from axon.skills.reminders.handler import ReminderSkill
+from axon.core.event_bus import Event, EventBus
 
 
 def reg():
@@ -25,6 +27,7 @@ def test_all_skills_discovered():
     assert "WeatherSkill" in names
     assert "CalculatorSkill" in names
     assert "BrowserSkill" in names
+    assert "ReminderSkill" in names
 
 
 def test_manifest_contract():
@@ -56,6 +59,17 @@ def test_time_and_date_execute():
     r = reg()
     assert r.execute(Intent(type="get_time")).ok
     assert r.execute(Intent(type="get_date")).ok
+
+
+def test_system_awareness_returns_structured_local_data():
+    r = reg()
+
+    running = r.execute(Intent(type="list_running_apps"))
+    network = r.execute(Intent(type="network_status"))
+
+    assert running.ok and isinstance(running.data["apps"], list)
+    assert network.ok and isinstance(network.data["connected"], bool)
+    assert isinstance(network.data["ip_addresses"], list)
 
 
 def test_app_launcher_rejects_empty_name():
@@ -258,6 +272,64 @@ def test_new_control_intents_route():
         assert r.route(Intent(type=it)) is not None, it
     for it in ("focus_window", "close_window"):
         assert r.route(Intent(type=it)) is not None, it
+    for it in ("get_active_window", "list_windows", "list_running_apps",
+               "network_status", "set_timer", "set_reminder",
+               "list_reminders", "cancel_reminder"):
+        assert r.route(Intent(type=it)) is not None, it
+
+
+def test_reminders_persist_list_cancel_and_fire(tmp_path):
+    path = tmp_path / "reminders.json"
+    skill = ReminderSkill(path)
+    skill.manifest = next(m for m in reg().catalogue()
+                          if m.name == "ReminderSkill")
+    events = []
+    bus = EventBus()
+    bus.subscribe(Event.REMINDER_DUE, lambda message: events.append(message.payload))
+    skill._bus = bus
+
+    created = skill.execute(Intent(type="set_timer", parameters={
+        "seconds": 60, "label": "tea"}))
+    listed = skill.execute(Intent(type="list_reminders"))
+    reloaded = ReminderSkill(path)
+    reloaded.manifest = skill.manifest
+
+    assert created.ok and listed.ok
+    assert listed.data["count"] == 1
+    assert reloaded.execute(Intent(type="list_reminders")).data["count"] == 1
+
+    due = skill._fire_due(created.data["due"] + 1)
+    assert due[0]["label"] == "tea"
+    assert events[0]["id"] == created.data["id"]
+    assert skill.execute(Intent(type="list_reminders")).data["count"] == 0
+
+    second = skill.execute(Intent(type="set_reminder", parameters={
+        "seconds": 120, "label": "stretch"}))
+    cancelled = skill.execute(Intent(type="cancel_reminder", parameters={
+        "identifier": second.data["id"]}))
+    assert cancelled.ok
+
+
+def test_reminder_rejects_unbounded_delay(tmp_path):
+    skill = ReminderSkill(tmp_path / "reminders.json")
+    skill.manifest = next(m for m in reg().catalogue()
+                          if m.name == "ReminderSkill")
+
+    result = skill.execute(Intent(type="set_timer", parameters={"seconds": 0}))
+
+    assert result.ok is False
+
+
+def test_reminder_background_service_stops_cleanly(tmp_path):
+    skill = ReminderSkill(tmp_path / "reminders.json")
+    skill.manifest = next(m for m in reg().catalogue()
+                          if m.name == "ReminderSkill")
+
+    skill.start(EventBus())
+    assert skill._thread is not None and skill._thread.is_alive()
+    skill.stop()
+
+    assert skill._thread is None
 
 
 def test_named_window_focus_uses_resolved_handle(monkeypatch):
@@ -274,6 +346,21 @@ def test_named_window_focus_uses_resolved_handle(monkeypatch):
 
     assert result.ok is True
     assert calls == [(42, "focus_window")]
+
+
+def test_window_awareness_returns_structured_titles(monkeypatch):
+    monkeypatch.setattr(window_handler.sys, "platform", "win32")
+    monkeypatch.setattr(window_handler, "_active_window_title",
+                        lambda: "Project - Visual Studio Code")
+    monkeypatch.setattr(window_handler, "_window_titles",
+                        lambda: ["Project - Visual Studio Code", "AXON"])
+    skill = reg().route(Intent(type="get_active_window"))
+
+    active = skill.execute(Intent(type="get_active_window"))
+    windows = skill.execute(Intent(type="list_windows"))
+
+    assert active.ok and active.data["title"] == "Project - Visual Studio Code"
+    assert windows.ok and windows.data["count"] == 2
 
 
 def test_window_close_is_individually_sensitive():

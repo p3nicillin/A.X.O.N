@@ -51,6 +51,28 @@ def test_private_browser_and_browser_search_intents_parse():
         "query": "AXON voice commands", "browser": "Firefox"}
 
 
+def test_timer_and_relative_reminder_intents_parse():
+    timer = parse("Set a timer for 5 minutes called tea")
+    reminder = parse("Remind me in 20 minutes to check the oven")
+
+    assert timer.intent.type == "set_timer"
+    assert timer.intent.parameters == {"seconds": 300.0, "label": "tea"}
+    assert reminder.intent.type == "set_reminder"
+    assert reminder.intent.parameters == {
+        "seconds": 1200.0, "label": "check the oven"}
+
+
+def test_reminder_management_and_desktop_awareness_parse():
+    assert parse("list my timers").intent.type == "list_reminders"
+    cancelled = parse("cancel reminder tea")
+    assert cancelled.intent.type == "cancel_reminder"
+    assert cancelled.intent.parameters["identifier"] == "tea"
+    assert parse("what is my active window").intent.type == "get_active_window"
+    assert parse("show open windows").intent.type == "list_windows"
+    assert parse("show running apps").intent.type == "list_running_apps"
+    assert parse("what is my local IP address").intent.type == "network_status"
+
+
 def test_note_preserves_casing():
     p = parse("note that I need to call Mom")
     assert p.intent.type == "add_note"
@@ -102,6 +124,8 @@ def test_new_intents_have_command_categories():
     assert command_type_for("open_website") == "WEB_NAVIGATION"
     assert command_type_for("search_browser") == "WEB_NAVIGATION"
     assert command_type_for("open_browser") == "WEB_NAVIGATION"
+    assert command_type_for("set_timer") == "REMINDERS"
+    assert command_type_for("network_status") == "SYSTEM_STATUS"
 
 
 def test_command_type_mapping_covers_six_categories():

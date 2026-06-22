@@ -16,6 +16,7 @@ COMMAND_TYPES: dict[str, str] = {
     "get_time": "TIME_DATE", "get_date": "TIME_DATE",
     "open_app": "APP_CONTROL", "close_app": "APP_CONTROL",
     "system_info": "SYSTEM_STATUS",
+    "list_running_apps": "SYSTEM_STATUS", "network_status": "SYSTEM_STATUS",
     "web_search": "WEB_SEARCH",
     "open_website": "WEB_NAVIGATION",
     "search_browser": "WEB_NAVIGATION", "open_browser": "WEB_NAVIGATION",
@@ -32,6 +33,9 @@ COMMAND_TYPES: dict[str, str] = {
     "restore_window": "WINDOW_CONTROL",
     "focus_window": "WINDOW_CONTROL", "close_window": "WINDOW_CONTROL",
     "read_clipboard": "CLIPBOARD", "set_clipboard": "CLIPBOARD",
+    "get_active_window": "WINDOW_CONTROL", "list_windows": "WINDOW_CONTROL",
+    "set_timer": "REMINDERS", "set_reminder": "REMINDERS",
+    "list_reminders": "REMINDERS", "cancel_reminder": "REMINDERS",
 }
 
 

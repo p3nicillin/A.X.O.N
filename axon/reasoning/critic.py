@@ -26,6 +26,8 @@ _REQUIRED_PARAMS: dict[str, list[str]] = {
     "close_app": ["app"],
     "open_website": ["site"],
     "search_browser": ["query"],
+    "set_timer": ["seconds"],
+    "set_reminder": ["seconds", "label"],
     "web_search": ["query"],
     "add_note": ["text"],
     "find_file": ["query"],

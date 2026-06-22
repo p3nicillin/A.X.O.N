@@ -26,6 +26,8 @@ class SkillRegistry:
         self._by_intent: dict[str, list[Skill]] = {}
         self._disabled = {s.lower() for s in (disabled or [])}
         self._config = config
+        self._bus = None
+        self._started = False
 
     def discover(self) -> "SkillRegistry":
         import axon.skills as pkg
@@ -84,7 +86,7 @@ class SkillRegistry:
         return name.lower() not in self._disabled
 
     def set_enabled(self, name: str, enabled: bool) -> bool:
-        known = {s.manifest.name.lower(): s.manifest.name for s in self.skills}
+        known = {s.manifest.name.lower(): s for s in self.skills}
         key = name.lower()
         if key not in known:
             return False
@@ -92,11 +94,42 @@ class SkillRegistry:
             self._disabled.discard(key)
         else:
             self._disabled.add(key)
+        if self._started:
+            try:
+                if enabled:
+                    known[key].start(self._bus)
+                else:
+                    known[key].stop()
+            except Exception as exc:
+                print(f"[registry] lifecycle error for '{name}': {exc!r}")
+                return False
         return True
 
     def disabled_skills(self) -> list[str]:
         known = {s.manifest.name.lower(): s.manifest.name for s in self.skills}
         return sorted(known[k] for k in self._disabled if k in known)
+
+    def start(self, bus=None) -> None:
+        """Start enabled skills that expose a bounded background service."""
+        self._bus = bus
+        self._started = True
+        for skill in self.skills:
+            if self.is_enabled(skill.manifest.name):
+                try:
+                    skill.start(bus)
+                except Exception as exc:
+                    print(f"[registry] failed to start '{skill.manifest.name}': "
+                          f"{exc!r}")
+
+    def stop(self) -> None:
+        """Stop all skill services, including skills disabled at runtime."""
+        for skill in reversed(self.skills):
+            try:
+                skill.stop()
+            except Exception as exc:
+                print(f"[registry] failed to stop '{skill.manifest.name}': {exc!r}")
+        self._started = False
+        self._bus = None
 
     def execute(self, intent: Intent) -> SkillResult:
         skill = self.route(intent)

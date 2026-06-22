@@ -204,8 +204,9 @@ artifacts from `data/crashes/`.
 ## 4. Using it
 
 * **Speak** naturally (mic + STT installed): *"open notepad"*, *"what time is
-  it"*, *"what is the weather"*, *"calculate 17 times 6"*, *"explain recursion"*,
-  *"write hello to file notes.txt"*, or *"focus window Spotify"*.
+  it"*, *"what is the weather"*, *"set a timer for 10 minutes"*, *"what is my
+  active window"*, *"show running apps"*, *"calculate 17 times 6"*, or *"write
+  hello to file notes.txt"*.
 * **No mic?** Type the same phrases in the **DEV INPUT** box and press Enter.
   (This is a developer affordance, not a chat UI — hide it with **F2**.)
 * **Esc** interrupts speech (barge-in). **F2** toggles the dev input.
@@ -233,14 +234,16 @@ version, declared intents, skill/intent sensitivity) and a `handler.py` exposing
 | AppLauncher | `open_app`, `close_app` | named Windows applications; closing requires confirmation |
 | Browser | `open_website`, `search_browser`, `open_browser` | validated sites/URLs, browser searches, and normal or private/incognito windows |
 | SystemInfo | `system_info` | also feeds the HUD gauges |
+| System awareness | `list_running_apps`, `network_status` | running process names and local interface/IP status remain inside AXON |
 | WebSearch | `web_search` | instant answer + browser fallback |
 | Weather | `get_weather` | current conditions/forecast remain inside AXON; no browser or API key |
 | Calculator | `calculate` | safe local arithmetic/functions; no code execution |
 | Notes | `add_note`, `read_notes`, `clear_notes` | local JSON |
+| Reminders | `set_timer`, `set_reminder`, `list_reminders`, `cancel_reminder` | persistent local scheduling with spoken in-app alerts |
 | FileSystem | `list_files`, `find_file`, `read_file`, `write_file`, `create_folder`, `move_path`, `delete_path`, `open_folder` | sandboxed to `data/workspace`; mutations require confirmation |
 | MediaControl | `play_pause`, `next_track`, `previous_track` | bounded OS media keys |
 | VolumeControl | `volume_up`, `volume_down`, `mute_toggle` | adjustment steps are clamped |
-| WindowControl | `focus_window`, `minimize_window`, `maximize_window`, `restore_window`, `close_window` | foreground/named windows; graceful close requires confirmation |
+| WindowControl | `get_active_window`, `list_windows`, `focus_window`, `minimize_window`, `maximize_window`, `restore_window`, `close_window` | foreground/open-window awareness and control; graceful close requires confirmation |
 | Clipboard | `read_clipboard`, `set_clipboard` | writes require confirmation; reads return a bounded preview |
 | Screenshot | `capture_screenshot` | confirmed capture to `data/workspace/screenshots` only |
 | Keyboard | `type_text`, `send_keystroke` | bounded, allow-listed, and always confirmed |
@@ -275,7 +278,8 @@ still route through a declared skill.
   `CoreRenderer` interface; "visual evolution" that changes with usage.
 * **Plugin marketplace** — manifests already version + declare capabilities;
   add signing + a download path.
-* **Desktop awareness** — an active-window skill feeding context to the AI.
+* **Automatic desktop context** — optionally feed the on-demand active-window
+  awareness into model context with explicit privacy controls.
 * **Speaker identity** — local voice embeddings and capability-scoped authz.
 * **Adaptive personality** — tone/voice profiles in `config` + TTS selection.
 ```

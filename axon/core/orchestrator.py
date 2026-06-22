@@ -90,6 +90,7 @@ class Orchestrator:
         bus.subscribe(Event.TRANSCRIPT, self._on_transcript)
         bus.subscribe(Event.SPEECH_START, self._on_speech_start)
         bus.subscribe(Event.SPEAK_END, self._on_speak_end)
+        bus.subscribe(Event.REMINDER_DUE, self._on_reminder_due)
 
         health = self.ai.health()
         self._log("info", f"AI core: active='{health['active']}' "
@@ -123,6 +124,12 @@ class Orchestrator:
         self.set_state(AxonState.IDLE)
         if self.audio_input is not None:
             self.audio_input.set_enabled(True)   # resume listening
+
+    def _on_reminder_due(self, msg) -> None:
+        payload = msg.payload or {}
+        label = str(payload.get("label", "Timer complete")).strip()
+        self._log("info", f"reminder due: {label}", source="reminders")
+        self._respond(f"Reminder: {label}, sir.")
 
     def _on_transcript(self, msg) -> None:
         payload = msg.payload or {}

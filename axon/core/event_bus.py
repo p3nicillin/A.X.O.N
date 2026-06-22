@@ -28,6 +28,7 @@ class Event(str, Enum):
 
     # skills
     SKILL_RESULT = "skill_result"      # payload: SkillResult
+    REMINDER_DUE = "reminder_due"      # payload: {id, label, due}
 
     # audio out
     SPEAK_START = "speak_start"        # payload: {text}

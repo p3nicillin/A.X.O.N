@@ -1,10 +1,12 @@
 {
   "name": "SystemInfoSkill",
-  "version": "1.0.0",
-  "description": "Reports CPU, memory, disk and battery status.",
-  "intents": ["system_info"],
+  "version": "1.1.0",
+  "description": "Reports machine telemetry, running applications, and local network status.",
+  "intents": ["system_info", "list_running_apps", "network_status"],
   "intent_params": {
-    "system_info": []
+    "system_info": [],
+    "list_running_apps": [],
+    "network_status": []
   },
   "sensitive": false,
   "author": "core"

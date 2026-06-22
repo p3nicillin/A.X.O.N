@@ -171,6 +171,7 @@ def main() -> None:
     def shutdown() -> None:
         if autonomy is not None:
             autonomy.stop()
+        registry.stop()
         audio.stop()
         tts.stop()
         crash.uninstall()
@@ -189,6 +190,7 @@ def main() -> None:
         """Spin up audio + speech once the window exists. The STT model is
         large, so load it in the background — the window appears instantly."""
         tts.start()
+        registry.start(bus)
         audio.start()
         if stt.can_load():
             bus.publish(Event.LOG, {"level": "info", "source": "stt",

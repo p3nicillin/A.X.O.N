@@ -46,6 +46,12 @@ class Skill(ABC):
         """Default: handle any intent type declared in the manifest."""
         return intent.type in self.manifest.intents
 
+    def start(self, bus=None) -> None:
+        """Optional lifecycle hook for bounded background capability services."""
+
+    def stop(self) -> None:
+        """Optional lifecycle hook; implementations must stop promptly."""
+
     @abstractmethod
     def execute(self, intent: Intent) -> SkillResult:
         """Perform the action and return a structured result.

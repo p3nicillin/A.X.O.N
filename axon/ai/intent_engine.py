@@ -14,6 +14,7 @@ engine. The capability boundary is preserved.
 from __future__ import annotations
 
 import re
+from datetime import datetime, timedelta
 
 from ..config import Config
 from ..skills.base import SkillManifest
@@ -102,6 +103,82 @@ class LocalIntentEngine:
                 return None
             return params
 
+        def duration_seconds(value: str) -> float | None:
+            match = re.fullmatch(
+                r"\s*(\d+(?:\.\d+)?)\s*"
+                r"(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?)\s*",
+                value, re.IGNORECASE)
+            if not match:
+                return None
+            amount = float(match.group(1))
+            unit = match.group(2).lower()
+            multiplier = (86400 if unit.startswith("day") else
+                          3600 if unit.startswith(("hour", "hr")) else
+                          60 if unit.startswith(("minute", "min")) else 1)
+            return amount * multiplier
+
+        duration_pattern = (
+            r"\d+(?:\.\d+)?\s*(?:seconds?|secs?|minutes?|mins?|"
+            r"hours?|hrs?|days?)")
+
+        # --- persistent timers and reminders ------------------------------
+        if re.search(r"\b(?:list|show|what(?:'s| is| are)?)\b.*"
+                     r"\b(?:timers?|reminders?)\b", t):
+            return packet("list reminders", "list_reminders", {}, "")
+        m = re.search(r"\b(?:cancel|remove|delete|stop)\s+(?:the\s+)?"
+                      r"(?:timer|reminder)(?:\s+(?:called|named|id)?\s*(.*))?$",
+                      text, re.IGNORECASE)
+        if m:
+            identifier = (m.group(1) or "").strip(" .!?")
+            params = {"identifier": identifier} if identifier else {}
+            return packet("cancel reminder", "cancel_reminder", params, "")
+        if re.search(r"\b(?:set|start)(?:\s+a)?\b.*\btimer\b", t):
+            dm = re.search(duration_pattern, text, re.IGNORECASE)
+            if dm:
+                seconds = duration_seconds(dm.group(0))
+                tail = text[dm.end():].strip(" .!?")
+                tail = re.sub(r"^timer\b\s*", "", tail,
+                              flags=re.IGNORECASE).strip()
+                tail = re.sub(r"^(?:called|named|for)\s+", "", tail,
+                              flags=re.IGNORECASE).strip()
+                params = {"seconds": seconds}
+                if tail:
+                    params["label"] = tail
+                return packet("set timer", "set_timer", params, "")
+        if re.search(r"\bremind me\b", t):
+            dm = re.search(duration_pattern, text, re.IGNORECASE)
+            if dm:
+                seconds = duration_seconds(dm.group(0))
+                tail = re.sub(r"^(?:to|about)\s+", "",
+                              text[dm.end():].strip(" .!?"),
+                              flags=re.IGNORECASE).strip()
+                head = re.sub(r"^.*?\bremind me\b", "", text[:dm.start()],
+                              flags=re.IGNORECASE).strip(" .!?")
+                head = re.sub(r"^(?:to|about)\s+|\s+in$", "", head,
+                              flags=re.IGNORECASE).strip()
+                label = tail or head or "Reminder"
+                return packet("set reminder", "set_reminder",
+                              {"seconds": seconds, "label": label}, "")
+            absolute = re.search(
+                r"\bremind me\s+(tomorrow\s+)?at\s+(\d{1,2})"
+                r"(?::(\d{2}))?\s*(am|pm)?\s+(?:to|about)\s+(.+)$",
+                text, re.IGNORECASE)
+            if absolute:
+                now = datetime.now()
+                hour = int(absolute.group(2))
+                minute = int(absolute.group(3) or 0)
+                meridiem = (absolute.group(4) or "").lower()
+                if meridiem and 1 <= hour <= 12:
+                    hour = hour % 12 + (12 if meridiem == "pm" else 0)
+                if 0 <= hour <= 23 and 0 <= minute <= 59:
+                    due = now.replace(hour=hour, minute=minute, second=0,
+                                      microsecond=0)
+                    if absolute.group(1) or due <= now:
+                        due += timedelta(days=1)
+                    return packet("set reminder", "set_reminder", {
+                        "seconds": (due - now).total_seconds(),
+                        "label": absolute.group(5).strip(" .!?")}, "")
+
         # --- time / date ---
         if re.search(r"\b(date|day|today'?s date|what day)\b", t):
             return packet("date query", "get_date", {}, "")
@@ -148,7 +225,17 @@ class LocalIntentEngine:
                 params["location"] = location
             return packet("weather query", "get_weather", params, "")
 
-        # --- system info ---
+        # --- system and desktop awareness ---
+        if re.search(r"\b(network status|network connection|internet connection|"
+                     r"am i (?:online|connected)|local ip|ip address)\b", t):
+            return packet("network status", "network_status", {}, "")
+        if re.search(r"\b(?:list|show|what|which)\b.*"
+                     r"\b(?:apps|applications|programs|processes)\b.*"
+                     r"\b(?:running|open)\b", t) or re.search(
+                         r"\bwhat(?:'s| is)\s+(?:currently\s+)?running\b|"
+                         r"\b(?:show|list)\s+(?:currently\s+)?(?:running|open)"
+                         r"\s+(?:apps|applications|programs|processes)\b", t):
+            return packet("list running apps", "list_running_apps", {}, "")
         if re.search(r"\b(cpu|memory|ram|system status|how('|')?s the system|battery|disk)\b", t):
             return packet("system telemetry", "system_info", {}, "")
 
@@ -217,6 +304,13 @@ class LocalIntentEngine:
             return packet("volume down", "volume_down", {}, "")
 
         # --- window state ---
+        if re.search(r"\b(?:what|which)\b.*\b(?:active|current|foreground)\b.*"
+                     r"\b(?:window|app|application)\b", t) or re.search(
+                         r"\bwhat (?:app|application) am i (?:using|in)\b", t):
+            return packet("active window", "get_active_window", {}, "")
+        if re.search(r"\b(?:list|show|what|which)\b.*\b(?:open|visible)\b.*"
+                     r"\bwindows?\b", t):
+            return packet("list windows", "list_windows", {}, "")
         m = re.search(r"\b(?:focus|switch to)(?: the)? window\s+(.+)$",
                       text, re.IGNORECASE)
         if m:
