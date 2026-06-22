@@ -13,6 +13,7 @@ from .critic import Critic
 from .executor import Executor, PlanRun
 from .planner import Planner
 from .schema import Plan, PlanStep, Verdict
+from .workflows import WorkflowStore
 
 __all__ = ["Critic", "Planner", "Executor", "PlanRun",
-           "Plan", "PlanStep", "Verdict"]
+           "Plan", "PlanStep", "Verdict", "WorkflowStore"]

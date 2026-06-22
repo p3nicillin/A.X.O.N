@@ -1,10 +1,13 @@
 """Pipeline tests: destructive-action confirmation + §11 command logging."""
 import time
+from types import SimpleNamespace
 
+from axon.ai.schema import Intent
 from axon.config import Config
 from axon.core.event_bus import Event, EventBus
 from axon.core.orchestrator import Orchestrator
 from axon.skills.registry import SkillRegistry
+from axon.reasoning.workflows import WorkflowStore
 
 
 class FakeTts:
@@ -26,6 +29,10 @@ def build():
     bus.subscribe(Event.COMMAND_LOG, lambda m: logs.append(m.payload))
     tts = FakeTts()
     orch = Orchestrator(cfg, bus, SkillRegistry().discover(), tts, None)
+    # Unit runs must not add synthetic workflow history to the developer's
+    # real data directory; persistence itself is covered in test_workflows.py.
+    if orch.executor is not None:
+        orch.executor.workflow_store = None
     return orch, tts, logs
 
 
@@ -185,6 +192,23 @@ def test_simple_command_has_no_plan_correlation():
     orch.submit_text("what time is it")
     assert wait(lambda: logs)
     assert logs[-1]["correlation"] == ""     # single-step fast path untouched
+
+
+def test_interrupted_safe_workflow_resumes_through_normal_execution_gates(tmp_path):
+    orch, _tts, logs = build()
+    store = WorkflowStore(tmp_path / "workflows.json")
+    orch.executor.workflow_store = store
+    steps = [Intent("get_time"), Intent("get_date")]
+    store.create("abcdef123456", "", steps)
+    store.checkpoint("abcdef123456", 1, SimpleNamespace(
+        ok=True, skill="TimeDateSkill", summary="time complete"))
+
+    orch.submit_text("resume workflow abcdef123456")
+
+    assert wait(lambda: any(entry["intent"] == "get_date" for entry in logs))
+    resumed_step = next(entry for entry in logs if entry["intent"] == "get_date")
+    assert resumed_step["correlation"] == "abcdef123456"
+    assert store.get("abcdef123456")["status"] == "completed"
 
 
 def test_plan_pauses_for_sensitive_step_then_completes():

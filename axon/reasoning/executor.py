@@ -31,6 +31,7 @@ class PlanRun:
     index: int = 0
     results: list[SkillResult] = field(default_factory=list)
     started: float = field(default_factory=time.monotonic)
+    store: object | None = field(default=None, repr=False)
 
     @property
     def current(self) -> Intent | None:
@@ -47,6 +48,8 @@ class PlanRun:
     def advance(self, result: SkillResult) -> None:
         self.results.append(result)
         self.index += 1
+        if self.store is not None:
+            self.store.checkpoint(self.correlation, self.index, result)
 
 
 def _packet_for(intent: Intent, source_text: str = "") -> IntentPacket:
@@ -56,19 +59,45 @@ def _packet_for(intent: Intent, source_text: str = "") -> IntentPacket:
 
 class Executor:
     def __init__(self, registry, critic, planner, bus, command_log,
-                 *, timeout: float = 15.0) -> None:
+                 *, timeout: float = 15.0, workflow_store=None) -> None:
         self._registry = registry
         self._critic = critic
         self._planner = planner
         self._bus = bus
         self._command_log = command_log      # callable from the orchestrator
         self.timeout = max(1.0, float(timeout))
+        self.workflow_store = workflow_store
 
     def new_run(self, plan, source_text: str, wake: bool) -> PlanRun:
         steps = [Intent(type=s.action, parameters=dict(s.input))
                  for s in plan.steps]
-        return PlanRun(correlation=uuid.uuid4().hex[:12], steps=steps,
-                       wake=wake, source_text=source_text)
+        run = PlanRun(correlation=uuid.uuid4().hex[:12], steps=steps,
+                      wake=wake, source_text=source_text,
+                      store=self.workflow_store)
+        if self.workflow_store is not None:
+            self.workflow_store.create(run.correlation, source_text, steps)
+        return run
+
+    def restore_run(self, correlation: str, *, wake: bool = True) -> PlanRun | None:
+        if self.workflow_store is None:
+            return None
+        record = self.workflow_store.get(correlation)
+        if not record or record.get("status") != "running" or not record.get("resumable"):
+            return None
+        steps = [Intent(type=s["type"], parameters=dict(s.get("parameters", {})))
+                 for s in record.get("steps", [])]
+        index = max(0, min(int(record.get("index", 0)), len(steps)))
+        results = [SkillResult(ok=bool(r.get("ok")),
+                               skill=str(r.get("skill", "workflow")),
+                               summary=str(r.get("summary", "completed")))
+                   for r in record.get("results", [])[:index]]
+        return PlanRun(correlation=correlation, steps=steps, wake=wake,
+                       source_text=str(record.get("source", "")), index=index,
+                       results=results, store=self.workflow_store)
+
+    def finish(self, run: PlanRun, status: str = "completed") -> None:
+        if self.workflow_store is not None:
+            self.workflow_store.finish(run.correlation, status)
 
     def timed_out(self, run: PlanRun) -> bool:
         return (time.monotonic() - run.started) > self.timeout

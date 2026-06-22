@@ -23,7 +23,7 @@ from ..ai.schema import Intent, IntentPacket, SkillResult
 from ..config import DATA_DIR, MEMORY_DIR, Config
 from ..memory import LocalEmbedder, MemoryGate, MemoryStore
 from ..perception.wake_word import WakeWord
-from ..reasoning import Critic, Executor, Planner
+from ..reasoning import Critic, Executor, Planner, WorkflowStore
 from ..skills.registry import SkillRegistry
 from ..user_model import UserModel
 from .event_bus import Event, EventBus
@@ -80,7 +80,9 @@ class Orchestrator:
         if config.agentic_enabled and self.planner is not None:
             self.executor = Executor(registry, self.critic, self.planner, bus,
                                      self._command_log,
-                                     timeout=config.agentic_step_timeout)
+                                     timeout=config.agentic_step_timeout,
+                                     workflow_store=WorkflowStore(
+                                         DATA_DIR / "workflows.json"))
 
         # §17 user model: a persistent inferred profile that biases replies.
         self.user_model: UserModel | None = None
@@ -327,6 +329,11 @@ class Orchestrator:
                       + (" [CLOUD]" if packet.cloud_routed else ""),
                       source="ai")
 
+            if packet.intent.type in {"list_workflows", "resume_workflow",
+                                       "cancel_workflow"}:
+                self._handle_workflow_command(packet.intent, wake)
+                return
+
             # §3 STEP3 classification (decided up front, then refined for gate)
             skill = self.registry.route(packet.intent) if packet.needs_skill else None
             requires_confirmation = self._needs_confirm(packet.intent, skill)
@@ -398,6 +405,48 @@ class Orchestrator:
         self._consider_memory(text, packet.intent.type)
         self._command_log(wake, packet.command_type, packet.intent.type,
                           "none", True)
+
+    def _handle_workflow_command(self, intent: Intent, wake: bool) -> None:
+        """Manage persisted multi-step checkpoints without bypassing plan gates."""
+        if self.executor is None or self.executor.workflow_store is None:
+            self._respond("Workflow recovery is unavailable, sir.", error=True)
+            return
+        store = self.executor.workflow_store
+        identifier = str(intent.get("identifier", "")).strip().lower()
+        recoverable = store.list(recoverable_only=True)
+        if intent.type == "list_workflows":
+            if not recoverable:
+                spoken = "There are no interrupted workflows to resume, sir."
+            else:
+                items = ", ".join(f"{r['id']} at step {r['index'] + 1} of {r['total']}"
+                                  for r in recoverable[:5])
+                spoken = f"Recoverable workflows: {items}."
+            self._respond(spoken)
+            self._command_log(wake, intent.command_type, intent.type,
+                              "WorkflowStore", True)
+            return
+        if identifier in {"", "last", "latest"} and recoverable:
+            identifier = str(recoverable[0]["id"])
+        if intent.type == "cancel_workflow":
+            ok = store.cancel(identifier)
+            self._respond((f"Workflow {identifier} cancelled, sir." if ok else
+                           "I couldn't find an active workflow with that ID, sir."),
+                          error=not ok)
+            self._command_log(wake, intent.command_type, intent.type,
+                              "WorkflowStore", ok)
+            return
+        run = self.executor.restore_run(identifier, wake=wake)
+        if run is None:
+            self._respond("That workflow cannot be resumed. It may be complete, "
+                          "cancelled, or contain redacted private input, sir.", error=True)
+            self._command_log(wake, intent.command_type, intent.type,
+                              "WorkflowStore", False)
+            return
+        self._log("info", f"resuming workflow [{identifier}] at step {run.index + 1}",
+                  source="planner")
+        self._command_log(wake, intent.command_type, intent.type,
+                          "WorkflowStore", True, identifier)
+        self._run_plan(run)
 
     def _execute(self, intent: Intent, ai_reply: str, source_text: str,
                  wake: bool) -> None:
@@ -486,6 +535,7 @@ class Orchestrator:
                 phrase = (self.critic.refusal_phrase(verdict) if self.critic
                           else "I can't carry that step out safely, sir.")
                 self._respond(phrase, error=True)
+                self.executor.finish(run, "failed")
                 return
             if self._needs_confirm(intent, skill):
                 self._pending = {"plan_run": run, "intent": intent,
@@ -526,6 +576,9 @@ class Orchestrator:
         self.context.add(run.source_text, spoken)
         if not aborted:
             self._consider_memory(run.source_text, "agentic_plan")
+        status = {None: "completed", "cancelled": "cancelled",
+                  "timeout": "timed_out"}.get(aborted, "failed")
+        self.executor.finish(run, status)
         self._respond(spoken, error=bool(aborted))
 
     # -- §4 memory hooks -----------------------------------------------------

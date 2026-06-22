@@ -534,6 +534,12 @@ class Bridge:
         except Exception:
             starts_with_windows = False
         state = getattr(self.orch, "state", AxonState.IDLE)
+        workflow_store = getattr(getattr(self.orch, "executor", None),
+                                 "workflow_store", None)
+        workflows = workflow_store.list() if workflow_store is not None else []
+        recoverable_workflows = [w for w in workflows
+                                 if w.get("status") == "running"
+                                 and w.get("resumable")]
         skills = []
         reminders = []
         for skill in self.orch.registry.skills:
@@ -615,6 +621,8 @@ class Bridge:
                 "memory_enabled": self.config.memory_enabled,
                 "memory_entries": len(memories),
                 "planning_enabled": self.config.planning_enabled,
+                "workflow_history": len(workflows),
+                "recoverable_workflows": len(recoverable_workflows),
                 "critic_enabled": self.config.critic_enabled,
                 "confirm_sensitive": self.config.confirm_sensitive,
                 "response_latency_ms": round(self._last_latency_ms, 1),

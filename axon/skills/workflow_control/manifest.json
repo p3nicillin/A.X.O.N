@@ -1,0 +1,13 @@
+{
+  "name": "WorkflowControlSkill",
+  "version": "1.0.0",
+  "description": "Lists, resumes, and cancels safely checkpointed multi-step workflows.",
+  "intents": ["list_workflows", "resume_workflow", "cancel_workflow"],
+  "intent_params": {
+    "list_workflows": [],
+    "resume_workflow": ["identifier"],
+    "cancel_workflow": ["identifier"]
+  },
+  "sensitive": false,
+  "author": "core"
+}

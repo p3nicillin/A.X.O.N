@@ -233,7 +233,8 @@ version, declared intents, skill/intent sensitivity) and a `handler.py` exposing
 | TimeDate | `get_time`, `get_date` | |
 | AppLauncher | `open_app`, `close_app` | named Windows applications; closing requires confirmation |
 | Browser | `open_website`, `search_browser`, `open_browser`, `browser_action` | validated navigation plus verified-foreground tab/history/download controls |
-| BrowserAutomation | `browser_navigate`, `browser_read_page`, `browser_click`, `browser_fill`, `browser_close_managed` | isolated visible Playwright browser; DOM mutations require confirmation and private-network requests are blocked |
+| BrowserAutomation | `browser_navigate`, `browser_read_page`, `browser_click`, `browser_fill`, `browser_close_managed` | isolated Playwright browser; grounded element IDs, confirmation-gated mutations, state verification, and private-network blocking |
+| WorkflowControl | `list_workflows`, `resume_workflow`, `cancel_workflow` | atomic per-step checkpoints with privacy-redacted recovery data |
 | SystemInfo | `system_info` | also feeds the HUD gauges |
 | System awareness | `list_running_apps`, `network_status` | running process names and local interface/IP status remain inside AXON |
 | WebSearch | `web_search`, `research_web`, `read_webpage` | sourced results and bounded public-page text stay inside AXON; no browser fallback |
@@ -310,10 +311,24 @@ Run `python scripts/benchmark_commands.py --minimum 0.98` to execute the
 checked-in command corpus. CI requires at least 98% accuracy and publishes the
 latency/miss report for every change.
 
+### v1.5 closed-loop execution
+
+The managed browser now returns visible interactive elements with stable IDs
+(`e1`, `e2`, …). Guarded click and fill actions can use those IDs, and every
+mutation verifies the resulting URL, page state, expected text, or field value
+before reporting success. This makes browser operation an observe → act →
+verify loop instead of a fire-and-forget input simulation.
+
+Compound commands are checkpointed atomically in `data/workflows.json` after
+every successful step. Say “list interrupted workflows”, “resume the latest
+workflow”, or “cancel workflow <id>” to manage recovery. Free-form form values
+and other private text parameters are redacted; workflows containing redacted
+inputs deliberately cannot auto-resume.
+
 ## 8. Future roadmap
 
-* **Visual action grounding** — add element coordinates and post-action visual
-  verification on top of the shipped local multimodal analysis.
+* **Cross-application visual grounding** — extend the shipped verified DOM
+  grounding to native Windows controls through UI Automation.
 * **True wake-word spotter** — swap the post-STT gate for openWakeWord/Porcupine.
 * **GPU visual core** — PySide6 + moderngl shader renderer behind the existing
   `CoreRenderer` interface; "visual evolution" that changes with usage.

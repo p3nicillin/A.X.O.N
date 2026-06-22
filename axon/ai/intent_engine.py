@@ -313,6 +313,20 @@ class LocalIntentEngine:
         if re.search(r"\b(previous|last|go back)\b.*\b(track|song)\b", t) or \
                 re.search(r"\bprevious track\b", t):
             return packet("previous track", "previous_track", {}, "")
+        # Durable workflow controls precede media's generic "resume" verb.
+        if re.search(r"\b(?:list|show|what are) (?:my )?(?:recoverable |interrupted )?workflows\b", t):
+            return packet("list recoverable workflows", "list_workflows", {}, "")
+        m = re.search(r"\b(?:resume|continue) (?:the )?(?:(last|latest) )?"
+                      r"(?:workflow|plan)(?:\s+([a-f0-9]{12}|last|latest))?\b", t)
+        if m:
+            return packet("resume workflow", "resume_workflow",
+                          {"identifier": m.group(1) or m.group(2) or "latest"}, "")
+        m = re.search(r"\b(?:cancel|discard) (?:the )?(?:(last|latest) )?"
+                      r"(?:workflow|plan)(?:\s+([a-f0-9]{12}|last|latest))?\b", t)
+        if m:
+            return packet("cancel workflow", "cancel_workflow",
+                          {"identifier": m.group(1) or m.group(2) or "latest"}, "")
+
         if re.search(r"\b(play|pause|resume)\b", t):
             return packet("toggle playback", "play_pause", {}, "")
 
@@ -425,6 +439,7 @@ class LocalIntentEngine:
         if re.search(r"\bclose (?:the )?(?:managed|automation|playwright) browser\b",
                      t):
             return packet("close managed browser", "browser_close_managed", {}, "")
+
         browser_actions = (
             (r"\b(?:open|create)(?: a)? new tab\b", "new_tab"),
             (r"\bclose(?: the| this)? tab\b", "close_tab"),

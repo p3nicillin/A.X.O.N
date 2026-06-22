@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import ipaddress
 import importlib.util
+import hashlib
 import queue
+import re
 import socket
 import threading
 from functools import lru_cache
@@ -13,6 +15,46 @@ from ...ai.schema import Intent, SkillResult
 from ..base import Skill
 
 _MAX_TEXT = 1000
+_ELEMENT_ID = re.compile(r"^e[1-9][0-9]{0,3}$")
+
+
+def _fingerprint(page) -> dict:
+    """Return a bounded page-state fingerprint without retaining page content."""
+    state = page.evaluate("""() => ({
+      title: document.title || '',
+      text: (document.body?.innerText || '').slice(0, 12000),
+      controls: Array.from(document.querySelectorAll(
+        'a,button,input,textarea,select,[role="button"],[role="link"]'))
+        .slice(0, 200).map(e => [e.tagName, e.innerText || e.value || '',
+          e.disabled || false, e.checked || false, e.getAttribute('aria-expanded')])
+    })""")
+    digest = hashlib.sha256(repr(state).encode("utf-8", "replace")).hexdigest()[:16]
+    return {"url": page.url, "title": str(state.get("title", "")),
+            "digest": digest}
+
+
+def _ground_elements(page) -> list[dict]:
+    """Label visible interactive DOM nodes with stable, session-local IDs."""
+    return page.evaluate("""() => {
+      const selector = 'a,button,input,textarea,select,[role="button"],[role="link"],[contenteditable="true"]';
+      let next = Number(document.documentElement.dataset.axonNextId || '1');
+      const output = [];
+      for (const el of Array.from(document.querySelectorAll(selector))) {
+        const rect = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        if (rect.width < 2 || rect.height < 2 || style.visibility === 'hidden' || style.display === 'none') continue;
+        if (!el.dataset.axonId) el.dataset.axonId = `e${next++}`;
+        const label = (el.getAttribute('aria-label') || el.innerText || el.value ||
+          el.getAttribute('placeholder') || el.getAttribute('name') || '').trim().slice(0, 160);
+        output.push({id: el.dataset.axonId, role: el.getAttribute('role') ||
+          ({A:'link',BUTTON:'button',INPUT:'input',TEXTAREA:'textbox',SELECT:'select'}[el.tagName] || el.tagName.toLowerCase()),
+          label, disabled: Boolean(el.disabled), x: Math.round(rect.x), y: Math.round(rect.y),
+          width: Math.round(rect.width), height: Math.round(rect.height)});
+        if (output.length >= 100) break;
+      }
+      document.documentElement.dataset.axonNextId = String(next);
+      return output;
+    }""")
 
 
 @lru_cache(maxsize=256)
@@ -126,33 +168,70 @@ class PlaywrightWorker:
     @staticmethod
     def _act(page, action: str, params: dict) -> dict:
         if action == "navigate":
-            page.goto(params["url"], wait_until="domcontentloaded")
-            return {"ok": True, "title": page.title(), "url": page.url}
+            response = page.goto(params["url"], wait_until="domcontentloaded")
+            after = _fingerprint(page)
+            verified = bool(after["url"] and after["title"] or after["digest"])
+            return {"ok": verified, "title": page.title(), "url": page.url,
+                    "status": response.status if response else None,
+                    "verification": {"verified": verified,
+                                     "reason": "page loaded and state captured",
+                                     "after": after}}
         if action == "read":
             text = page.locator("body").inner_text()[:8000]
             links = page.locator("a").evaluate_all(
                 "els => els.slice(0,30).map(a => ({text:(a.innerText||'').trim(), url:a.href})).filter(x => x.text)")
+            elements = _ground_elements(page)
             return {"ok": True, "title": page.title(), "url": page.url,
-                    "text": text, "links": links}
+                    "text": text, "links": links, "elements": elements,
+                    "state": _fingerprint(page)}
         if action == "click":
-            target = params["target"]
-            locator = page.get_by_role("link", name=target, exact=False)
-            if locator.count() == 0:
+            target, element_id = params.get("target", ""), params.get("element_id", "")
+            _ground_elements(page)
+            locator = page.locator(f'[data-axon-id="{element_id}"]') if element_id else \
+                page.get_by_role("link", name=target, exact=False)
+            if not element_id and locator.count() == 0:
                 locator = page.get_by_role("button", name=target, exact=False)
-            if locator.count() == 0:
+            if not element_id and locator.count() == 0:
                 locator = page.get_by_text(target, exact=False)
-            locator.first.click()
-            page.wait_for_timeout(400)
-            return {"ok": True, "title": page.title(), "url": page.url,
-                    "clicked": target}
-        if action == "fill":
-            field, text = params["field"], params["text"]
-            locator = page.get_by_label(field, exact=False)
             if locator.count() == 0:
+                return {"ok": False, "error": "No matching visible element was found."}
+            before = _fingerprint(page)
+            locator.first.click()
+            page.wait_for_timeout(650)
+            after = _fingerprint(page)
+            changed = before != after
+            expected = str(params.get("expected", "")).strip()
+            expected_met = True
+            if expected:
+                expected_met = page.get_by_text(expected, exact=False).count() > 0
+            verified = changed and expected_met
+            reason = ("page state changed" if changed else "no observable page change")
+            if expected and not expected_met:
+                reason = f"expected outcome not found: {expected}"
+            return {"ok": verified, "title": page.title(), "url": page.url,
+                    "clicked": element_id or target,
+                    "verification": {"verified": verified, "reason": reason,
+                                     "expected": expected or None,
+                                     "before": before, "after": after}}
+        if action == "fill":
+            field, text = params.get("field", ""), params["text"]
+            element_id = params.get("element_id", "")
+            _ground_elements(page)
+            locator = page.locator(f'[data-axon-id="{element_id}"]') if element_id else \
+                page.get_by_label(field, exact=False)
+            if not element_id and locator.count() == 0:
                 locator = page.get_by_placeholder(field, exact=False)
+            if locator.count() == 0:
+                return {"ok": False, "error": "No matching form field was found."}
             locator.first.fill(text)
-            return {"ok": True, "title": page.title(), "url": page.url,
-                    "field": field, "characters": len(text)}
+            actual = locator.first.evaluate(
+                "e => ('value' in e ? e.value : (e.textContent || ''))")
+            verified = actual == text
+            return {"ok": verified, "title": page.title(), "url": page.url,
+                    "field": element_id or field, "characters": len(text),
+                    "verification": {"verified": verified,
+                                     "reason": "field value matches requested text" if verified
+                                               else "field value did not match"}}
         return {"ok": False, "error": "unsupported managed browser action"}
 
     def stop(self) -> None:
@@ -201,15 +280,24 @@ class BrowserAutomationSkill(Skill):
             params["url"] = url
         elif action == "click":
             target = str(intent.get("target", "")).strip()
-            if not 1 <= len(target) <= 200:
-                return self.fail("Click targets must contain 1-200 characters.")
-            params["target"] = target
+            element_id = str(intent.get("element_id", "")).strip().lower()
+            if not element_id and not 1 <= len(target) <= 200:
+                return self.fail("Provide a click target or grounded element ID.")
+            if element_id and not _ELEMENT_ID.fullmatch(element_id):
+                return self.fail("Grounded element IDs use the form e1, e2, and so on.")
+            expected = str(intent.get("expected", "")).strip()
+            if len(expected) > 200:
+                return self.fail("Expected outcomes must be at most 200 characters.")
+            params.update(target=target, element_id=element_id, expected=expected)
         elif action == "fill":
             field = str(intent.get("field", "")).strip()
             text = str(intent.get("text", ""))
-            if not 1 <= len(field) <= 160 or not 1 <= len(text) <= _MAX_TEXT:
-                return self.fail("A field and 1-1000 characters of text are required.")
-            params.update(field=field, text=text)
+            element_id = str(intent.get("element_id", "")).strip().lower()
+            if (not element_id and not 1 <= len(field) <= 160) or not 1 <= len(text) <= _MAX_TEXT:
+                return self.fail("A field or grounded element ID and 1-1000 characters of text are required.")
+            if element_id and not _ELEMENT_ID.fullmatch(element_id):
+                return self.fail("Grounded element IDs use the form e1, e2, and so on.")
+            params.update(field=field, text=text, element_id=element_id)
         result = self.worker.perform(action, params)
         if not result.get("ok"):
             return self.fail(str(result.get("error", "Browser automation failed.")),
@@ -222,7 +310,9 @@ class BrowserAutomationSkill(Skill):
             speak = f"Opened {result.get('title') or result.get('url')}, sir."
         else:
             speak = f"Managed browser {action} complete, sir."
-        summary = (f"{action}: {result.get('title') or result.get('url') or 'done'}")
+        verification = result.get("verification") or {}
+        suffix = " [verified]" if verification.get("verified") else ""
+        summary = (f"{action}: {result.get('title') or result.get('url') or 'done'}{suffix}")
         return self.ok(summary, speak=speak, **{
             key: value for key, value in result.items() if key != "ok"})
 

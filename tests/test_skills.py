@@ -204,6 +204,37 @@ def test_managed_browser_mutating_dom_actions_are_sensitive():
     assert manifest.is_sensitive("browser_read_page") is False
 
 
+def test_managed_browser_accepts_grounded_ids_and_exposes_verification(monkeypatch):
+    calls = []
+
+    class FakeWorker:
+        def perform(self, action, parameters):
+            calls.append((action, parameters))
+            return {"ok": True, "title": "Account", "url": "https://example.com",
+                    "verification": {"verified": True, "reason": "page state changed"}}
+
+        def stop(self):
+            pass
+
+    skill = reg().route(Intent(type="browser_click"))
+    monkeypatch.setattr(skill, "worker", FakeWorker())
+    result = skill.execute(Intent(type="browser_click", parameters={
+        "element_id": "e12", "expected": "Account"}))
+
+    assert result.ok is True
+    assert result.data["verification"]["verified"] is True
+    assert calls[0][1] == {"target": "", "element_id": "e12", "expected": "Account"}
+
+
+def test_managed_browser_rejects_untrusted_grounded_selector(monkeypatch):
+    skill = reg().route(Intent(type="browser_click"))
+    result = skill.execute(Intent(type="browser_click", parameters={
+        "element_id": "button:nth-child(1)"}))
+
+    assert result.ok is False
+    assert "e1" in result.summary
+
+
 def test_filesystem_is_sandboxed():
     # path traversal must be refused
     res = reg().execute(Intent(type="list_files",
