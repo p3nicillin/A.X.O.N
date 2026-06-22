@@ -235,7 +235,7 @@ version, declared intents, skill/intent sensitivity) and a `handler.py` exposing
 | Browser | `open_website`, `search_browser`, `open_browser`, `browser_action` | validated navigation plus verified-foreground tab/history/download controls |
 | BrowserAutomation | `browser_navigate`, `browser_read_page`, `browser_click`, `browser_fill`, `browser_close_managed` | isolated Playwright browser; grounded element IDs, confirmation-gated mutations, state verification, and private-network blocking |
 | WorkflowControl | `list_workflows`, `resume_workflow`, `cancel_workflow` | atomic per-step checkpoints with privacy-redacted recovery data |
-| NativeAutomation | `desktop_inspect`, `desktop_click`, `desktop_fill` | active-window Win32 control grounding with guarded, timeout-protected and verified actions |
+| NativeAutomation | `desktop_inspect`, `desktop_click`, `desktop_fill` | isolated Windows accessibility grounding (`u*`) plus Win32 fallback (`n*`), with guarded and verified actions |
 | SystemInfo | `system_info` | also feeds the HUD gauges |
 | System awareness | `list_running_apps`, `network_status` | running process names and local interface/IP status remain inside AXON |
 | WebSearch | `web_search`, `research_web`, `read_webpage` | sourced results and bounded public-page text stay inside AXON; no browser fallback |
@@ -339,10 +339,25 @@ The release workflow also avoids illegal direct secret references in step
 conditions, preventing the pre-job GitHub Actions failures that generated
 failure emails after otherwise successful pushes.
 
+### v1.7 modern Windows accessibility
+
+Native inspection now combines Microsoft UI Automation controls (`u1`, `u2`,
+…) with the existing HWND-backed fallback (`n1`, `n2`, …). WPF, WinUI and
+other accessible applications expose semantic roles, labels, bounds, supported
+click/fill patterns and protected-field status. AXON uses only safe UIA
+patterns—Value, Invoke, Selection, Toggle and Expand/Collapse—and still
+requires confirmation plus a verified post-action state change.
+
+UI Automation runs in a fresh hidden Windows PowerShell process for each
+operation. Requests travel as JSON over stdin, private values never appear in
+the command line, and a hard timeout terminates a stalled provider. The main
+AXON process therefore remains responsive even when an application's
+accessibility implementation is defective.
+
 ## 8. Future roadmap
 
-* **Modern Windows accessibility grounding** — broaden the shipped HWND-backed
-  native controls to owner-drawn WinUI/WPF accessibility trees.
+* **Low-latency response streaming** — stream conversational output into the UI
+  and sentence-level TTS while retaining complete structured intent validation.
 * **True wake-word spotter** — swap the post-STT gate for openWakeWord/Porcupine.
 * **GPU visual core** — PySide6 + moderngl shader renderer behind the existing
   `CoreRenderer` interface; "visual evolution" that changes with usage.

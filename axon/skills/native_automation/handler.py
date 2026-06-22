@@ -3,17 +3,21 @@ from __future__ import annotations
 
 import ctypes
 import hashlib
+import json
 import queue
 import re
+import shutil
+import subprocess
 import sys
 import threading
 import time
 from ctypes import wintypes
+from pathlib import Path
 
 from ...ai.schema import Intent, SkillResult
 from ..base import Skill
 
-_ELEMENT_ID = re.compile(r"^n[1-9][0-9]{0,3}$")
+_ELEMENT_ID = re.compile(r"^[nu][1-9][0-9]{0,3}$")
 _MAX_CONTROLS = 120
 _MAX_TEXT = 1000
 _WM_GETTEXT = 0x000D
@@ -120,10 +124,109 @@ def _describe(element_id: str, hwnd: int) -> dict:
         bounds = {"x": int(rect.left), "y": int(rect.top),
                   "width": int(rect.right - rect.left),
                   "height": int(rect.bottom - rect.top)}
-    return {"id": element_id, "role": _class_name(hwnd)[:80],
+    role = _class_name(hwnd)[:80]
+    folded = role.casefold()
+    return {"id": element_id, "role": role,
             "label": "<protected>" if _is_protected(hwnd)
             else _control_text(hwnd)[:160],
-            "enabled": bool(user32.IsWindowEnabled(hwnd)), "bounds": bounds}
+            "enabled": bool(user32.IsWindowEnabled(hwnd)),
+            "protected": _is_protected(hwnd),
+            "can_fill": "edit" in folded and not _is_protected(hwnd),
+            "can_click": "button" in folded,
+            "bounds": bounds}
+
+
+class AccessibilityBridge:
+    """Run Microsoft UI Automation out-of-process with a hard time limit."""
+
+    def __init__(self, timeout: float = 15.0,
+                 helper_path: Path | None = None) -> None:
+        self.timeout = max(3.0, min(float(timeout), 30.0))
+        self.helper_path = helper_path or Path(__file__).with_name("uia_helper.ps1")
+        self.powershell = shutil.which("powershell.exe")
+        self.root_id = ""
+        self.targets: dict[str, str] = {}
+        self.metadata: dict[str, dict] = {}
+
+    @property
+    def available(self) -> bool:
+        return bool(sys.platform == "win32" and self.powershell
+                    and self.helper_path.exists())
+
+    def _run(self, request: dict) -> dict:
+        if not self.available:
+            return {"ok": False, "error": "Windows accessibility helper is unavailable."}
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        try:
+            completed = subprocess.run(
+                [self.powershell, "-NoProfile", "-NonInteractive",
+                 "-ExecutionPolicy", "Bypass", "-File", str(self.helper_path)],
+                input=json.dumps(request), text=True, capture_output=True,
+                timeout=self.timeout, creationflags=flags, check=False)
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "error": "Windows accessibility action timed out."}
+        except OSError as exc:
+            return {"ok": False, "error": f"Windows accessibility helper failed: {exc}"}
+        lines = [line.strip() for line in completed.stdout.splitlines()
+                 if line.strip().startswith("{")]
+        if not lines:
+            return {"ok": False, "error": "Windows accessibility helper returned no result."}
+        try:
+            data = json.loads(lines[-1])
+            return data if isinstance(data, dict) else {
+                "ok": False, "error": "Invalid Windows accessibility result."}
+        except json.JSONDecodeError:
+            return {"ok": False, "error": "Invalid Windows accessibility result."}
+
+    def inspect(self) -> dict:
+        result = self._run({"action": "inspect"})
+        if not result.get("ok"):
+            self.root_id, self.targets, self.metadata = "", {}, {}
+            return result
+        self.root_id = str(result.get("root_id", ""))
+        exposed = []
+        self.targets = {}
+        self.metadata = {}
+        for raw in result.get("elements", [])[:_MAX_CONTROLS]:
+            element_id, target_id = str(raw.get("id", "")), str(
+                raw.get("runtime_id", ""))
+            if not _ELEMENT_ID.fullmatch(element_id) or not target_id:
+                continue
+            self.targets[element_id] = target_id
+            self.metadata[element_id] = dict(raw)
+            exposed.append({key: value for key, value in raw.items()
+                            if key != "runtime_id"})
+        result["elements"] = exposed
+        result["count"] = len(exposed)
+        result.pop("root_id", None)
+        return result
+
+    def act(self, action: str, params: dict) -> dict:
+        element_id = params["element_id"]
+        target_id = self.targets.get(element_id)
+        if not self.root_id or not target_id:
+            return {"ok": False,
+                    "error": "That accessibility snapshot is no longer available."}
+        metadata = self.metadata.get(element_id, {})
+        if action == "fill" and metadata.get("protected"):
+            return {"ok": False,
+                    "error": "Protected credential fields are not automated."}
+        if action == "fill" and metadata.get("can_fill") is False:
+            return {"ok": False, "error": "That accessibility control does not support text input."}
+        if action == "click" and metadata.get("can_click") is False:
+            return {"ok": False, "error": "That accessibility control has no safe action pattern."}
+        request = {"action": action, "root_id": self.root_id,
+                   "target_id": target_id, "element_id": element_id}
+        if action == "fill":
+            request["text"] = params["text"]
+        else:
+            request["expected"] = params.get("expected", "")
+        result = self._run(request)
+        if action == "fill" and not result.get("ok"):
+            secret = str(params.get("text", ""))
+            if secret and isinstance(result.get("error"), str):
+                result["error"] = result["error"].replace(secret, "<redacted>")
+        return result
 
 
 class NativeUIWorker:
@@ -134,6 +237,7 @@ class NativeUIWorker:
         self._queue: queue.Queue = queue.Queue(maxsize=12)
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
+        self.accessibility = AccessibilityBridge(timeout)
 
     def perform(self, action: str, parameters: dict) -> dict:
         self._ensure_thread()
@@ -166,6 +270,7 @@ class NativeUIWorker:
                 if sys.platform != "win32":
                     result = {"ok": False, "error": "Native automation requires Windows."}
                 elif action == "inspect":
+                    accessible = self.accessibility.inspect()
                     root = int(_user32().GetForegroundWindow())
                     if not root:
                         result = {"ok": False, "error": "No active window was found."}
@@ -175,11 +280,22 @@ class NativeUIWorker:
                                     for i, hwnd in enumerate(handles, 1)}
                         records = [_describe(key, hwnd)
                                    for key, hwnd in elements.items()]
-                        result = {"ok": True, "window": _text(root)[:200],
-                                  "handle": root, "elements": records,
-                                  "count": len(records), "state": _fingerprint(root)}
+                        accessible_records = (accessible.get("elements", [])
+                                              if accessible.get("ok") else [])
+                        combined = [*accessible_records, *records]
+                        result = {"ok": True,
+                                  "backend": "accessibility+win32"
+                                  if accessible_records else "win32",
+                                  "window": accessible.get("window")
+                                  if accessible.get("ok") else _text(root)[:200],
+                                  "handle": root, "elements": combined,
+                                  "count": len(combined),
+                                  "state": {"accessibility": accessible.get("state"),
+                                            "win32": _fingerprint(root)}}
                 else:
-                    result = self._act(root, elements, action, params)
+                    result = (self.accessibility.act(action, params)
+                              if params.get("element_id", "").startswith("u")
+                              else self._act(root, elements, action, params))
                 box["result"] = result
             except Exception as exc:
                 box["result"] = {"ok": False,
@@ -262,7 +378,9 @@ class NativeAutomationSkill(Skill):
         self.worker.stop()
 
     def status(self) -> dict:
-        return {"available": sys.platform == "win32", "backend": "win32",
+        return {"available": sys.platform == "win32",
+                "backend": "accessibility+win32",
+                "accessibility_available": self.worker.accessibility.available,
                 "active": bool(self.worker._thread and self.worker._thread.is_alive()),
                 "active_window_only": True, "verified_actions": True}
 
@@ -275,7 +393,7 @@ class NativeAutomationSkill(Skill):
         if action in {"click", "fill"}:
             element_id = str(intent.get("element_id", "")).strip().lower()
             if not _ELEMENT_ID.fullmatch(element_id):
-                return self.fail("Use a grounded desktop control ID such as n1.")
+                return self.fail("Use a grounded desktop control ID such as u1 or n1.")
             params["element_id"] = element_id
         if action == "click":
             expected = str(intent.get("expected", "")).strip()

@@ -297,7 +297,7 @@ class LocalIntentEngine:
                      r"(?:active |current )?(?:app|application|desktop|window) controls\b", t):
             return packet("inspect native controls", "desktop_inspect", {}, "")
         m = re.search(r"\bclick (?:desktop |native )?(?:control |element )?"
-                      r"(n[1-9][0-9]{0,3})(?: (?:and )?(?:expect|verify|until) (.+?))?[.!]?$",
+                      r"([un][1-9][0-9]{0,3})(?: (?:and )?(?:expect|verify|until) (.+?))?[.!]?$",
                       text, re.IGNORECASE)
         if m:
             params = {"element_id": m.group(1).lower()}
@@ -305,7 +305,7 @@ class LocalIntentEngine:
                 params["expected"] = m.group(2).strip(" .!?")
             return packet("click native control", "desktop_click", params, "")
         m = re.search(r"\bfill (?:desktop |native )?(?:control |element )?"
-                      r"(n[1-9][0-9]{0,3}) with (.+?)[.!]?$",
+                      r"([un][1-9][0-9]{0,3}) with (.+?)[.!]?$",
                       text, re.IGNORECASE)
         if m:
             return packet("fill native control", "desktop_fill", {

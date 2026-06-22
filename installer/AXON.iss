@@ -1,5 +1,5 @@
 #define MyAppName "AXON"
-#define MyAppVersion "1.6.0"
+#define MyAppVersion "1.7.0"
 #define MyAppPublisher "p3nicillin"
 #define MyAppExeName "AXON.exe"
 

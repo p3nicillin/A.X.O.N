@@ -1,7 +1,7 @@
 {
   "name": "NativeAutomationSkill",
-  "version": "1.0.0",
-  "description": "Inspects active Win32 applications and performs confirmation-gated, timeout-protected, verified actions on grounded native controls.",
+  "version": "1.1.0",
+  "description": "Inspects modern Windows accessibility trees with isolated hard timeouts, falls back to Win32 controls, and performs confirmation-gated verified actions.",
   "intents": ["desktop_inspect", "desktop_click", "desktop_fill"],
   "intent_params": {
     "desktop_inspect": [],

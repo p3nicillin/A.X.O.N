@@ -2,7 +2,8 @@
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 hidden = collect_submodules("axon.skills")
-data = collect_data_files("axon", includes=["visual/web/*.html", "skills/*/*.json"])
+data = collect_data_files(
+    "axon", includes=["visual/web/*.html", "skills/*/*.json", "skills/*/*.ps1"])
 
 a = Analysis(
     ["run.py"],
