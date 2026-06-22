@@ -27,6 +27,7 @@ from pathlib import Path
 import webview
 
 from .. import __version__
+from ..ai.schema import Intent
 from ..config import DATA_DIR
 from ..core.event_bus import Event, EventBus
 from ..core.states import AxonState
@@ -64,11 +65,13 @@ class Bridge:
         self._started_at = time.time()
         self._last_latency_ms = 0.0
         self._backend_latency_ms = 0.0
+        self._last_transcript_confidence = 0.0
         self._turn_started_at = 0.0
         self._turn_latencies = deque(maxlen=100)
         self._logs = deque(maxlen=200)
         self._commands = deque(maxlen=200)
         self._panel_dirty = threading.Event()
+        self._update_status = {"checked": False, "current": __version__}
         # net counters for throughput readout
         self._net = None
         # the page signals readiness via on_ready(); until then evaluate_js is
@@ -170,6 +173,49 @@ class Bridge:
                     "error": "correction not found" if not removed else ""}
         except OSError as exc:
             return {"ok": False, "error": str(exc)}
+
+    def clear_voice_samples(self) -> dict:
+        stt = getattr(getattr(self.orch, "audio_input", None), "stt", None)
+        if stt is None or not hasattr(stt, "clear_voice_samples"):
+            return {"ok": False, "error": "speech recognizer unavailable"}
+        count = stt.clear_voice_samples()
+        self._panel_dirty.set()
+        return {"ok": True, "count": count}
+
+    def create_reminder(self, minutes: float, label: str) -> dict:
+        try:
+            seconds = float(minutes) * 60
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "minutes must be a number"}
+        result = self.orch.registry.execute(Intent(
+            type="set_reminder", parameters={"seconds": seconds,
+                                              "label": str(label or "Reminder")}))
+        self.bus.publish(Event.SKILL_RESULT, result)
+        self._panel_dirty.set()
+        return {"ok": result.ok, "summary": result.summary}
+
+    def cancel_reminder(self, identifier: str) -> dict:
+        result = self.orch.registry.execute(Intent(
+            type="cancel_reminder", parameters={"identifier": identifier}))
+        self.bus.publish(Event.SKILL_RESULT, result)
+        self._panel_dirty.set()
+        return {"ok": result.ok, "summary": result.summary}
+
+    def set_startup_enabled(self, enabled: bool) -> dict:
+        try:
+            from ..windows_startup import set_startup_enabled
+            ok = set_startup_enabled(bool(enabled))
+            self._panel_dirty.set()
+            return {"ok": ok, "enabled": bool(enabled)}
+        except OSError as exc:
+            return {"ok": False, "error": str(exc)}
+
+    def check_for_updates(self) -> dict:
+        from ..update import check_for_update
+        self._update_status = check_for_update()
+        self._update_status["checked"] = True
+        self._panel_dirty.set()
+        return self._update_status
 
     @staticmethod
     def _audit_summary(record: dict) -> str:
@@ -303,7 +349,8 @@ class Bridge:
     def show_result(self, result) -> None:
         if getattr(result, "skill", "") not in {
                 "WeatherSkill", "CalculatorSkill", "FileSystemSkill",
-                "SystemInfoSkill", "ScreenshotSkill"}:
+                "SystemInfoSkill", "ScreenshotSkill", "WebSearchSkill",
+                "ReminderSkill"}:
             return
         payload = {
             "ok": bool(getattr(result, "ok", False)),
@@ -357,6 +404,11 @@ class Bridge:
     def _on_transcript(self, payload: dict) -> None:
         # show the user's spoken command (typed commands echo themselves in JS)
         text = payload.get("text", "").strip()
+        try:
+            self._last_transcript_confidence = float(
+                payload.get("confidence", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            self._last_transcript_confidence = 0.0
         if text and payload.get("wake_satisfied") and not payload.get("wake_only"):
             self.user_said(self.orch.wake.clean_spotter_command(text))
 
@@ -467,12 +519,23 @@ class Bridge:
         active = ai_health.get("active", "rules")
         stt_engine = getattr(getattr(self.orch, "audio_input", None), "stt", None)
         speech_profile = getattr(stt_engine, "profile", None)
+        try:
+            from ..perception.stt import VOICE_SAMPLES_DIR
+            voice_sample_count = len(list(VOICE_SAMPLES_DIR.glob("sample-*.wav")))
+        except Exception:
+            voice_sample_count = 0
         active_info = ai_health.get("backends", {}).get(active, {})
         crash_reporter = getattr(self.orch, "crash_reporter", None)
         crash = crash_reporter.summary() if crash_reporter is not None else {
             "enabled": False, "count": 0, "last": None}
+        try:
+            from ..windows_startup import startup_enabled
+            starts_with_windows = startup_enabled()
+        except Exception:
+            starts_with_windows = False
         state = getattr(self.orch, "state", AxonState.IDLE)
         skills = []
+        reminders = []
         for skill in self.orch.registry.skills:
             m = skill.manifest
             settings = {}
@@ -491,6 +554,8 @@ class Bridge:
                 "enabled": self.orch.registry.is_enabled(m.name),
                 "settings": settings,
             })
+            if m.name == "ReminderSkill" and hasattr(skill, "snapshot"):
+                reminders = skill.snapshot()
         return {
             "status": {
                 "backend": active,
@@ -507,6 +572,7 @@ class Bridge:
             "memory": memories,
             "agents": self._agents(ai_health),
             "skills": skills,
+            "reminders": reminders,
             "ai": {"health": ai_health, "metrics": metrics},
             "audit": {
                 "logs": list(self._logs)[-80:],
@@ -531,6 +597,9 @@ class Bridge:
                 "available_voices": list(getattr(self.orch.tts, "voice_names", [])),
                 "speech_corrections": (speech_profile.snapshot()
                                        if speech_profile is not None else []),
+                "last_confidence": round(self._last_transcript_confidence, 3),
+                "confidence_threshold": self.config.speech_confidence_threshold,
+                "voice_sample_count": voice_sample_count,
             },
             "settings": self.config.user_settings_snapshot(),
             "diagnostics": {
@@ -550,6 +619,10 @@ class Bridge:
                 "crash_reporting": crash.get("enabled", False),
                 "crash_reports": crash.get("count", 0),
                 "last_crash": ((crash.get("last") or {}).get("timestamp") or "none"),
+                "desktop_context": self.config.desktop_context_enabled,
+                "starts_with_windows": starts_with_windows,
+                "tray_enabled": self.config.tray_enabled,
+                "update": dict(self._update_status),
             },
         }
 
@@ -605,6 +678,21 @@ class _Api:
     def remove_speech_correction(self, heard: str) -> dict:
         return self._bridge.remove_speech_correction(heard)
 
+    def clear_voice_samples(self) -> dict:
+        return self._bridge.clear_voice_samples()
+
+    def create_reminder(self, minutes: float, label: str) -> dict:
+        return self._bridge.create_reminder(minutes, label)
+
+    def cancel_reminder(self, identifier: str) -> dict:
+        return self._bridge.cancel_reminder(identifier)
+
+    def set_startup_enabled(self, enabled: bool) -> dict:
+        return self._bridge.set_startup_enabled(enabled)
+
+    def check_for_updates(self) -> dict:
+        return self._bridge.check_for_updates()
+
     def get_audit_history(self, offset: int = 0, limit: int = 50) -> dict:
         return self._bridge.audit_history(offset, limit)
 
@@ -622,6 +710,7 @@ class AxonWebWindow:
         self._on_close_cb = None
         self._boot = None
         self._stop = threading.Event()
+        self._tray = None
         bus.subscribe_all(self.bridge.on_event)
 
     def set_on_close(self, cb) -> None:
@@ -649,9 +738,15 @@ class AxonWebWindow:
                          daemon=True).start()
         if self._boot is not None:
             self._boot()
+        if self.config.tray_enabled:
+            from ..tray import TrayController
+            self._tray = TrayController(self.bridge.window)
+            self._tray.start()
 
     def _on_closed(self) -> None:
         self._stop.set()
+        if self._tray is not None:
+            self._tray.stop()
         self.bridge.close()
         if self._on_close_cb:
             self._on_close_cb()

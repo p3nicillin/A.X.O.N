@@ -32,10 +32,12 @@ FAST_PATH_INTENTS = frozenset({
     "close_window", "get_active_window", "list_windows",
     "read_clipboard",
     "capture_screenshot",
+    "inspect_screen",
     "get_weather",
     "calculate",
     "open_website",
-    "search_browser", "open_browser",
+    "search_browser", "open_browser", "browser_action",
+    "read_webpage",
     "set_timer", "set_reminder", "list_reminders", "cancel_reminder",
 })
 

@@ -1,0 +1,41 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -q
+      - run: python -m PyInstaller --noconfirm --clean AXON.spec
+      - name: Import signing certificate
+        if: ${{ secrets.AXON_SIGN_CERT_BASE64 != '' }}
+        shell: pwsh
+        env:
+          CERTIFICATE: ${{ secrets.AXON_SIGN_CERT_BASE64 }}
+        run: '[IO.File]::WriteAllBytes("axon-signing.pfx", [Convert]::FromBase64String($env:CERTIFICATE))'
+      - name: Sign executable
+        if: ${{ secrets.AXON_SIGN_CERT_BASE64 != '' }}
+        shell: pwsh
+        env:
+          AXON_SIGN_CERT_PASSWORD: ${{ secrets.AXON_SIGN_CERT_PASSWORD }}
+        run: signtool sign /f axon-signing.pfx /p $env:AXON_SIGN_CERT_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 dist/AXON/AXON.exe
+      - run: Compress-Archive -Path dist/AXON/* -DestinationPath AXON-windows-x64.zip
+        shell: pwsh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AXON-windows-x64
+          path: AXON-windows-x64.zip
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: AXON-windows-x64.zip

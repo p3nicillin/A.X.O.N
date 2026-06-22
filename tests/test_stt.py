@@ -6,6 +6,7 @@ import numpy as np
 
 from axon.config import Config
 from axon.perception.stt import SttEngine
+from axon.perception import stt as stt_module
 
 
 class FakeWhisper:
@@ -48,3 +49,29 @@ def test_whisper_command_buffer_is_bounded_to_thirty_seconds():
     stt.accept_command(b"x" * (config.sample_rate * 2 * 31))
 
     assert len(stt._command_pcm) == config.sample_rate * 2 * 30
+
+
+def test_opt_in_voice_training_sample_stays_local(tmp_path, monkeypatch):
+    config = Config()
+    config.voice_sample_collection = True
+    monkeypatch.setattr(stt_module, "VOICE_SAMPLES_DIR", tmp_path)
+    stt = SttEngine(config)
+    stt.command_backend = "faster-whisper"
+    stt._whisper = FakeWhisper()
+    stt.profile = SimpleNamespace(apply=lambda text: text, snapshot=lambda: [])
+    stt.available = True
+    stt.accept_command(np.array([0, 1000, -1000, 0], dtype=np.int16).tobytes())
+
+    stt.command_final()
+
+    assert len(list(tmp_path.glob("sample-*.wav"))) == 1
+    assert len(list(tmp_path.glob("sample-*.json"))) == 1
+    assert stt.clear_voice_samples() == 2
+
+
+def test_personal_corrections_bias_whisper_prompt():
+    stt = SttEngine(Config())
+    stt.profile = SimpleNamespace(snapshot=lambda: [
+        {"heard": "accent what", "expected": "AXON what"}])
+
+    assert "AXON what" in stt._initial_prompt()

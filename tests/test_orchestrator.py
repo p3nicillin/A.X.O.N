@@ -110,6 +110,43 @@ def test_wake_satisfied_transcript_executes_without_regating():
     assert logs[-1]["success"] is True
 
 
+def test_low_confidence_voice_command_is_confirmed_before_execution():
+    orch, tts, logs = build()
+    orch.config.speech_confidence_threshold = 0.5
+
+    orch.bus.publish(Event.TRANSCRIPT, {
+        "text": "what time is it", "confidence": 0.2,
+        "wake_satisfied": True})
+
+    assert orch._pending_transcript is not None
+    assert logs == []
+    assert any("is that correct" in spoken.lower() for spoken in tts.spoken)
+
+    orch.submit_text("yes")
+    assert wait(lambda: logs)
+    assert logs[-1]["intent"] == "get_time"
+
+
+def test_low_confidence_correction_executes_replacement(tmp_path):
+    from types import SimpleNamespace
+    from axon.perception.speech_profile import SpeechProfile
+
+    orch, _tts, logs = build()
+    profile = SpeechProfile(tmp_path / "speech.json")
+    orch.audio_input = SimpleNamespace(stt=SimpleNamespace(profile=profile),
+                                       set_enabled=lambda _enabled: None)
+    orch.config.speech_confidence_threshold = 0.5
+    orch.bus.publish(Event.TRANSCRIPT, {
+        "text": "what is the thyme", "confidence": 0.2,
+        "wake_satisfied": True})
+
+    orch.submit_text("no, I meant what is the time")
+
+    assert wait(lambda: logs)
+    assert logs[-1]["intent"] == "get_time"
+    assert profile.apply("what is the thyme") == "what is the time"
+
+
 def test_wake_only_transcript_acknowledges():
     orch, tts, logs = build()
     orch.bus.publish(Event.TRANSCRIPT,

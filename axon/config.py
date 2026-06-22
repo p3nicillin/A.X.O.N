@@ -9,16 +9,21 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tomllib
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any, ClassVar
 
 # --- Well-known directories -------------------------------------------------
-ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT / "data"          # logs, notes, runtime state
+_FROZEN = bool(getattr(sys, "frozen", False))
+ROOT = (Path(sys.executable).resolve().parent if _FROZEN else
+        Path(__file__).resolve().parent.parent)
+_USER_HOME = (Path(os.getenv("LOCALAPPDATA", Path.home())) / "AXON"
+              if _FROZEN else ROOT)
+DATA_DIR = _USER_HOME / "data"    # logs, notes, runtime state
 MEMORY_DIR = DATA_DIR / "memory"  # §4 episodic vault + semantic index
-MODELS_DIR = ROOT / "models"      # downloaded STT models live here
+MODELS_DIR = _USER_HOME / "models"  # downloaded STT models live here
 SKILLS_DIR = Path(__file__).resolve().parent / "skills"
 USER_SETTINGS_PATH = DATA_DIR / "user_settings.json"
 
@@ -73,7 +78,7 @@ class AIConfig:
 class Config:
     USER_SETTING_NAMES: ClassVar[frozenset[str]] = frozenset({
         "tts_voice", "tts_rate", "address_term", "wake_ack_phrase",
-        "require_wake_word", "ai_engine",
+        "require_wake_word", "voice_sample_collection", "ai_engine",
     })
     # --- AI intent engine ---
     anthropic_api_key: str = ""   # legacy; prefer ANTHROPIC_API_KEY / secrets store
@@ -89,6 +94,8 @@ class Config:
     stt_whisper_model: str = "small.en"
     stt_whisper_device: str = "cpu"  # use cuda after installing CUDA runtime libs
     stt_whisper_compute_type: str = "int8"
+    speech_confidence_threshold: float = 0.45  # confirm uncertain voice commands
+    voice_sample_collection: bool = False  # explicit opt-in WAV training samples
     sample_rate: int = 16000
 
     # --- Voice activity detection (energy based) ---
@@ -134,6 +141,7 @@ class Config:
     # Rendering frontend: "auto" prefers the AXON web UI (pywebview), then the
     # PySide6 + GLSL bloom core, then the pure-Tkinter HUD.
     ui_backend: str = "auto"          # "auto" | "web" | "qt" | "tk"
+    tray_enabled: bool = True           # packaged/web UI exposes restore/quit tray menu
     bloom_intensity: float = 1.35     # additive bloom strength in the composite
     bloom_threshold: float = 0.55     # luminance above which pixels bloom
     bloom_bokeh_radius: float = 18.0  # disc radius (texels) for bokeh highlights
@@ -155,6 +163,7 @@ class Config:
 
     # --- User model (§17) ---
     user_model_enabled: bool = True   # infer a persistent profile to bias replies
+    desktop_context_enabled: bool = True  # inject active-window title into intent context
 
     # --- Autonomy (§16, opt-in: observes the system, suggestion-only) ---
     autonomy_enabled: bool = False    # background context awareness + suggestions
@@ -231,9 +240,9 @@ class Config:
                 value = int(value)
                 if not 80 <= value <= 350:
                     raise ValueError("tts_rate must be between 80 and 350")
-            elif name == "require_wake_word":
+            elif name in {"require_wake_word", "voice_sample_collection"}:
                 if not isinstance(value, bool):
-                    raise ValueError("require_wake_word must be boolean")
+                    raise ValueError(f"{name} must be boolean")
             elif name == "ai_engine":
                 value = str(value).strip().lower()
                 if value not in {"local", "rules", "cloud"}:
@@ -290,6 +299,7 @@ class Config:
             "address_term": self.address_term,
             "wake_ack_phrase": self.wake_ack_phrase,
             "require_wake_word": self.require_wake_word,
+            "voice_sample_collection": self.voice_sample_collection,
             "ai_engine": self.ai.engine,
             "locked": sorted(getattr(self, "_env_locked", set())
                              & self.USER_SETTING_NAMES),

@@ -8,19 +8,19 @@ it is a first-install or machine-policy concern.
 |---|---|---|
 | `TimeDateSkill` | Manifest: `get_time`, `get_date`; enabled by discovery; not sensitive | Skills panel shows intents/parameters/enabled state; real toggle updates registry state |
 | `AppLauncherSkill` | Manifest: `open_app(app)`, `close_app(app)`; named Windows apps; close is destructive and confirmation-gated | Skills panel shows intents/parameters; toggle updates registry state |
-| `BrowserSkill` | `open_website`, `search_browser`, and `open_browser`; known sites or validated URLs; Chrome incognito, Edge InPrivate, and Firefox private windows | Prevents browser phrases from becoming executable names and keeps failures inside AXON |
+| `BrowserSkill` | Navigation/private windows plus bounded tab, history, download, reload and find actions; actions require a verified foreground browser | Browser phrases never become executable names; structured failures stay inside AXON |
 | `SystemInfoSkill` | `system_info`, `list_running_apps`, `network_status`; machine metrics, process names, active local interfaces/IPs | Skills panel, live telemetry gauges, and structured in-app results |
-| `WebSearchSkill` | Manifest: `web_search(query)`; opens DuckDuckGo/browser fallback; not sensitive | Skills panel shows intent/parameter; toggle updates registry state |
+| `WebSearchSkill` | `web_search`, `research_web`, `read_webpage`; sourced RSS/instant results and SSRF-bounded public page extraction | Search results, citations and page previews render in AXON without opening Google |
 | `WeatherSkill` | Manifest: `get_weather(location, days)`; cached Open-Meteo JSON; configurable default location; never opens a browser | Spoken and conversation responses remain in AXON; structured current/forecast data flows through `SkillResult` |
 | `CalculatorSkill` | Manifest: `calculate(expression)`; bounded AST evaluation with arithmetic, constants, and common functions; no `eval` | Fast-path response plus structured result card |
 | `NotesSkill` | Manifest: `add_note(text)`, `read_notes`, `clear_notes`; local JSON notes | Skills panel plus memory drawer entries for stored durable facts |
-| `ReminderSkill` | Persistent timers/reminders with set, list, cancel, lifecycle-managed due alerts, and atomic local JSON state | Due alerts are spoken and shown in the AXON conversation; structured results expose IDs and due times |
+| `ReminderSkill` | Persistent timers/reminders with set, list, cancel, lifecycle-managed due alerts, native toast/beep fallback and atomic state | Dedicated Tasks drawer creates/cancels items and shows IDs/due times |
 | `FileSystemSkill` | Read/list/find/open plus atomic write/append, create folder, move, and non-recursive delete; hard sandbox root `data/workspace`; mutations are intent-level sensitive | Structured result cards, sandbox metadata, per-intent confirmation, and live enable toggle |
 | `MediaControlSkill` | Manifest: `play_pause`, `next_track`, `previous_track`; OS media keys via ctypes; not sensitive | Skills panel shows intents/enabled state; toggle updates registry state |
 | `VolumeSkill` | Manifest: `volume_up(steps)`, `volume_down(steps)`, `mute_toggle`; OS volume keys via ctypes, steps clamped 1-10; not sensitive | Skills panel shows intents/parameters; toggle updates registry state |
 | `WindowControlSkill` | Active-window/open-window reporting, named focus, minimise, maximise, restore, and graceful `WM_CLOSE`; close is intent-level sensitive | Skills panel shows read/control intents, title parameter, sensitivity, and enabled state |
 | `ClipboardSkill` | Manifest: `read_clipboard`, `set_clipboard(text)`; read returns a bounded preview; write is intent-level sensitive | Skills panel exposes per-intent sensitivity, parameters, and enabled state |
-| `ScreenshotSkill` | Manifest: `capture_screenshot(filename)`; Pillow capture; filenames cannot contain paths; PNG output confined to `data/workspace/screenshots`; sensitive | Skills panel shows sandboxed capture intent/parameter and confirmation status |
+| `ScreenshotSkill` | Sandboxed PNG capture plus sensitive, turn-scoped `inspect_screen`; optional local Tesseract OCR and no inspection persistence | Structured screen dimensions, active title and extracted text render in conversation |
 | `KeyboardSkill` | Manifest: `type_text(text)`, `send_keystroke(keys)`; Win32 input only; text bounded to 1,000 characters; shortcuts allow-listed; sensitive | Skills panel shows both confirmation-gated intents and parameters |
 | AI backend: local | `[ai] engine`, `[ai.local]`; Ollama/llama.cpp/OpenAI-compatible runtime; health via router | AI panel shows active backend, fallback chain, model/health, latency and fallback metrics; mode control rebuilds the router live |
 | AI backend: cloud | `[ai.cloud] enabled`, model, vendor key from env/secrets; off by default | AI panel shows configured health without exposing secrets |
@@ -34,7 +34,9 @@ it is a first-install or machine-policy concern.
 | Synaptic activity | Live CPU/memory/network telemetry, microphone amplitude, request deltas, backend latency, and pipeline state events | Firing rate, pulse energy/speed, and node glow are data-driven rather than timer-randomised |
 | Wake word | `wake_word`, aliases, `require_wake_word`, wake spotter | Diagnostics panel shows wake word/required state; status bar reflects listening |
 | Hybrid speech recognition | Grammar-biased Vosk wake detector plus faster-whisper `small.en` command transcription; automatic Vosk fallback | Voice panel reports active recognizer/model; model loads in background |
-| Personal speech adaptation | Persistent phrase-level heard→intended corrections; no raw audio or biometric embedding retained | Voice panel adds/removes corrections live from `data/speech_profile.json` |
+| Personal speech adaptation | Phrase corrections bias Whisper prompts and post-correct transcripts; low-confidence commands request confirmation; optional local WAV collection is explicit opt-in | Voice panel shows confidence, manages corrections, toggles sample collection and deletes samples |
+| Desktop context | Current foreground-window title is injected turn-by-turn into intent backends, without screen contents or persistence | Diagnostics reports the privacy control; explicit window commands remain available |
+| Release operations | PyInstaller spec, Inno Setup definition, current-user startup registration, tray restore/quit, GitHub tagged build and optional certificate signing | Diagnostics exposes startup and read-only update checks; installation remains explicit |
 | Mic on/off | Audio input `set_enabled`; web mic button | Bottom mic control, waveform, diagnostics mic availability |
 | Barge-in / Esc | TTS interrupt path in renderer affordances | Existing renderer control remains; listed in diagnostics |
 | Dev input | Hidden developer text input/F2 affordance | Bottom input remains developer affordance, not primary chat surface |
@@ -68,7 +70,7 @@ it is a first-install or machine-policy concern.
 |---|---|
 | C — Embodied control skills | **Done**: Media/Volume/Window/Clipboard/Screenshot/Keyboard skills shipped; per-intent sensitivity, sandboxing, rules + LLM reachability, and contract tests are in place |
 | A — Multi-step agentic execution | **Done**: planner decomposes compound commands into a bounded multi-step plan; `Executor` runs steps through the skill engine with per-step critic gating, one correlation id, per-step confirmation pause/resume, and abort-on-failure |
-| B — Visual perception | Designed; needs a local vision model integration |
+| B — Visual perception | **Baseline shipped**: sensitive ephemeral screen capture + local OCR; full visual semantics still needs a configured multimodal model |
 | D — Speaker identity & scoped authz | Designed; needs a speaker-embedding model |
 | E — Streaming conversation & barge-in | Designed; needs token-streaming TTS handoff |
 | F — Agent console UI | Designed; depends on A/B/D/E |
@@ -79,5 +81,5 @@ it is a first-install or machine-policy concern.
 |---|---|
 | Dedicated neural wake model | Current offline grammar-biased Vosk spotter is functional; a trained Axon detector would reduce acoustic false rejects further |
 | Speaker verification and RBAC | Sensitive actions are confirmed and sandboxed, but identity-bound authorization is not implemented |
-| Signed packaging and updater | Runtime is source-launched; MSI/MSIX signing and staged updates remain deployment work |
+| Production signing identity | Build/sign/update pipelines are present; an actual trusted certificate must be supplied by the project owner |
 | Optional cloud TTS providers | Native SAPI5 is reliable and offline; policy-gated neural providers remain future integrations |

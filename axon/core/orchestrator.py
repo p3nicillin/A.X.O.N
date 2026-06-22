@@ -51,6 +51,7 @@ class Orchestrator:
         self.ai = build_engine(config, registry.catalogue(), bus)
         self.state = AxonState.IDLE
         self._pending: dict | None = None         # awaiting yes/no confirmation
+        self._pending_transcript: dict | None = None
         self._busy = threading.Lock()
 
         # §4 memory: episodic vault + semantic recall + the decision gate.
@@ -134,6 +135,10 @@ class Orchestrator:
     def _on_transcript(self, msg) -> None:
         payload = msg.payload or {}
         text = payload.get("text", "").strip()
+        try:
+            confidence = float(payload.get("confidence", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            confidence = 0.0
 
         # The wake spotter already detected "AXON" and captured the command,
         # so these transcripts are pre-gated.
@@ -144,12 +149,30 @@ class Orchestrator:
                     self._respond(self.config.wake_ack_phrase)
                 return
             if text:
+                if self._confirm_uncertain_transcript(text, confidence):
+                    return
                 self.submit_text(text, bypass_wake=True, wake_satisfied=True)
             return
 
         # legacy path: apply the post-STT wake-word check
         if text:
+            if self._confirm_uncertain_transcript(text, confidence):
+                return
             self.submit_text(text, bypass_wake=False)
+
+    def _confirm_uncertain_transcript(self, text: str,
+                                      confidence: float) -> bool:
+        if self._pending_transcript is not None:
+            return False
+        threshold = float(getattr(
+            self.config, "speech_confidence_threshold", 0.0) or 0.0)
+        if not (0.0 < confidence < threshold):
+            return False
+        self._pending_transcript = {"text": text, "confidence": confidence}
+        self._log("warn", f"low-confidence transcript ({confidence:.0%}): {text}",
+                  source="stt")
+        self._respond(f"I heard ‘{text}’. Is that correct, sir?")
+        return True
 
     # -- public entry --------------------------------------------------------
     # Voice goes through the wake-word gate; the typed DEV INPUT bypasses it so
@@ -158,6 +181,10 @@ class Orchestrator:
                     wake_satisfied: bool = False) -> None:
         text = text.strip()
         if not text:
+            return
+
+        if self._pending_transcript is not None:
+            self._resolve_transcript_confirmation(text)
             return
 
         # answering a pending sensitive-action confirmation? (no wake needed)
@@ -188,9 +215,41 @@ class Orchestrator:
         threading.Thread(target=self._process, args=(command, True),
                          daemon=True).start()
 
+    def _resolve_transcript_confirmation(self, response: str) -> None:
+        pending = self._pending_transcript or {}
+        heard = str(pending.get("text", "")).strip()
+        replacement = re.search(
+            r"\b(?:no[, ]*)?(?:i said|i meant|it was|should be)\s+(.+)$",
+            response, re.IGNORECASE)
+        if replacement:
+            expected = replacement.group(1).strip(" .!?")
+            self._pending_transcript = None
+            profile = getattr(getattr(self.audio_input, "stt", None),
+                              "profile", None)
+            if profile is not None and heard and expected:
+                try:
+                    profile.add(heard, expected)
+                    self._log("info", f"learned speech correction: {heard} -> "
+                              f"{expected}", source="stt")
+                except (OSError, ValueError):
+                    pass
+            self._respond("Correction learned, sir.")
+            self.submit_text(expected, bypass_wake=True, wake_satisfied=True)
+            return
+        if _AFFIRMATIVE.search(response.lower()):
+            self._pending_transcript = None
+            self.submit_text(heard, bypass_wake=True, wake_satisfied=True)
+            return
+        if _NEGATIVE.search(response.lower()):
+            self._pending_transcript = None
+            self._respond("Understood. Please repeat the command, sir.")
+            return
+        self._respond("Please say yes, no, or ‘I meant’ followed by the command, sir.")
+
     def update_user_settings(self, changes: dict) -> dict:
         allowed = {"tts_voice", "tts_rate", "address_term",
-                   "wake_ack_phrase", "require_wake_word"}
+                   "wake_ack_phrase", "require_wake_word",
+                   "voice_sample_collection"}
         if set(changes) - allowed:
             return {"ok": False, "error": "unsupported live setting"}
         try:
@@ -257,6 +316,7 @@ class Orchestrator:
             self.set_state(AxonState.THINKING)
             self._recall_into_context(text)
             self._profile_into_context()
+            self._desktop_into_context()
             packet = self.ai.interpret(text, self.context)
             self.bus.publish(Event.INTENT, packet)
             self._log("debug",
@@ -487,6 +547,18 @@ class Orchestrator:
         """§17: bias the AI core with a short profile summary for this turn."""
         hint = self.user_model.hint_for_ai() if self.user_model else ""
         self.context.set_user_hint(hint)
+
+    def _desktop_into_context(self) -> None:
+        if not getattr(self.config, "desktop_context_enabled", False):
+            self.context.set_desktop_hint("")
+            return
+        try:
+            from ..skills.window_control.handler import _active_window_title
+            title = _active_window_title()
+        except Exception:
+            title = ""
+        self.context.set_desktop_hint(
+            f"Active window title: {title}" if title else "")
 
     def _consider_memory(self, source_text: str, intent_type: str) -> None:
         """Run the §4.2 decision gate on a completed turn and persist if durable.

@@ -72,6 +72,15 @@ def test_prompt_lists_params_and_unknown_escape_hatch():
     assert "unknown" in prompt          # the safe escape hatch is described
 
 
+def test_active_window_context_is_bounded_and_explicit():
+    context = Context()
+    context.set_desktop_hint("Active window title: Project - Visual Studio Code")
+    prompt = local_backend([VALID])._system(SPECS, context)
+
+    assert "Current desktop context" in prompt
+    assert "Project - Visual Studio Code" in prompt
+
+
 def test_validate_rejects_unknown_intent_and_params():
     ok, _ = validate_packet_dict(json.loads(VALID), SPECS)
     assert ok

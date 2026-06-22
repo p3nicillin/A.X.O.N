@@ -17,9 +17,11 @@ COMMAND_TYPES: dict[str, str] = {
     "open_app": "APP_CONTROL", "close_app": "APP_CONTROL",
     "system_info": "SYSTEM_STATUS",
     "list_running_apps": "SYSTEM_STATUS", "network_status": "SYSTEM_STATUS",
-    "web_search": "WEB_SEARCH",
+    "web_search": "WEB_SEARCH", "research_web": "WEB_SEARCH",
+    "read_webpage": "WEB_SEARCH",
     "open_website": "WEB_NAVIGATION",
     "search_browser": "WEB_NAVIGATION", "open_browser": "WEB_NAVIGATION",
+    "browser_action": "WEB_NAVIGATION",
     "get_weather": "WEATHER",
     "calculate": "UTILITY",
     "add_note": "NOTES", "read_notes": "NOTES", "clear_notes": "NOTES",
@@ -36,6 +38,7 @@ COMMAND_TYPES: dict[str, str] = {
     "get_active_window": "WINDOW_CONTROL", "list_windows": "WINDOW_CONTROL",
     "set_timer": "REMINDERS", "set_reminder": "REMINDERS",
     "list_reminders": "REMINDERS", "cancel_reminder": "REMINDERS",
+    "inspect_screen": "SCREEN_PERCEPTION",
 }
 
 

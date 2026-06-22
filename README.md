@@ -205,8 +205,8 @@ artifacts from `data/crashes/`.
 
 * **Speak** naturally (mic + STT installed): *"open notepad"*, *"what time is
   it"*, *"what is the weather"*, *"set a timer for 10 minutes"*, *"what is my
-  active window"*, *"show running apps"*, *"calculate 17 times 6"*, or *"write
-  hello to file notes.txt"*.
+  active window"*, *"research local speech recognition"*, *"what is on my
+  screen"*, *"reopen the closed tab"*, or *"write hello to file notes.txt"*.
 * **No mic?** Type the same phrases in the **DEV INPUT** box and press Enter.
   (This is a developer affordance, not a chat UI — hide it with **F2**.)
 * **Esc** interrupts speech (barge-in). **F2** toggles the dev input.
@@ -232,20 +232,20 @@ version, declared intents, skill/intent sensitivity) and a `handler.py` exposing
 |-------|---------|-------|
 | TimeDate | `get_time`, `get_date` | |
 | AppLauncher | `open_app`, `close_app` | named Windows applications; closing requires confirmation |
-| Browser | `open_website`, `search_browser`, `open_browser` | validated sites/URLs, browser searches, and normal or private/incognito windows |
+| Browser | `open_website`, `search_browser`, `open_browser`, `browser_action` | validated navigation plus verified-foreground tab/history/download controls |
 | SystemInfo | `system_info` | also feeds the HUD gauges |
 | System awareness | `list_running_apps`, `network_status` | running process names and local interface/IP status remain inside AXON |
-| WebSearch | `web_search` | instant answer + browser fallback |
+| WebSearch | `web_search`, `research_web`, `read_webpage` | sourced results and bounded public-page text stay inside AXON; no browser fallback |
 | Weather | `get_weather` | current conditions/forecast remain inside AXON; no browser or API key |
 | Calculator | `calculate` | safe local arithmetic/functions; no code execution |
 | Notes | `add_note`, `read_notes`, `clear_notes` | local JSON |
-| Reminders | `set_timer`, `set_reminder`, `list_reminders`, `cancel_reminder` | persistent local scheduling with spoken in-app alerts |
+| Reminders | `set_timer`, `set_reminder`, `list_reminders`, `cancel_reminder` | persistent scheduling, task centre, spoken alerts, and optional native toast |
 | FileSystem | `list_files`, `find_file`, `read_file`, `write_file`, `create_folder`, `move_path`, `delete_path`, `open_folder` | sandboxed to `data/workspace`; mutations require confirmation |
 | MediaControl | `play_pause`, `next_track`, `previous_track` | bounded OS media keys |
 | VolumeControl | `volume_up`, `volume_down`, `mute_toggle` | adjustment steps are clamped |
 | WindowControl | `get_active_window`, `list_windows`, `focus_window`, `minimize_window`, `maximize_window`, `restore_window`, `close_window` | foreground/open-window awareness and control; graceful close requires confirmation |
 | Clipboard | `read_clipboard`, `set_clipboard` | writes require confirmation; reads return a bounded preview |
-| Screenshot | `capture_screenshot` | confirmed capture to `data/workspace/screenshots` only |
+| Screenshot | `capture_screenshot`, `inspect_screen` | confirmed sandbox capture or ephemeral local OCR; inspection is never persisted |
 | Keyboard | `type_text`, `send_keystroke` | bounded, allow-listed, and always confirmed |
 
 **Add a skill:** copy a folder, edit `manifest.json` + `handler.py`, restart.
@@ -263,6 +263,12 @@ Discovery is automatic — no other file changes.
   **confirmation** (`confirm_sensitive`).
 * No credential access, no remote code execution, no hidden background actions.
 * Every action is **logged and visible** in the HUD.
+* Webpage reading rejects private/local addresses, redirects and responses over
+  1 MB. Browser controls work only when a supported browser is foreground.
+* Voice audio training samples are off by default, remain under
+  `data/voice_samples`, and can be deleted from the Voice panel. Phrase
+  corrections immediately bias transcription; WAV collection prepares a local
+  fine-tuning dataset but does not claim to retrain Whisper by itself.
 
 General explanations, coding questions, writing help, and advice use the local
 model's tool-less `answer` intent and remain in AXON. Live or actionable requests
@@ -270,16 +276,31 @@ still route through a declared skill.
 
 ---
 
-## 7. Future roadmap
+## 7. Windows release build
 
-* **Visual perception** — consented, turn-scoped local screen understanding.
+Run `scripts/build_release.ps1` to execute tests and build `dist/AXON/AXON.exe`
+with PyInstaller. If `AXON_SIGN_CERT_PATH` and `AXON_SIGN_CERT_PASSWORD` are
+provided, the script signs the executable. Installing Inno Setup also produces
+the versioned installer from `installer/AXON.iss`.
+
+Tagged GitHub releases run the same clean Windows build. Signing occurs only
+when the repository has the certificate secrets; AXON never fabricates a signed
+status. The Diagnostics panel can check the release feed, but downloads and
+installation always require an explicit user action.
+
+Packaged builds keep mutable data and downloaded speech models under
+`%LOCALAPPDATA%\AXON`; source checkouts continue using the repository `data/`
+and `models/` directories.
+
+## 8. Future roadmap
+
+* **Full visual semantics** — upgrade ephemeral OCR to a configured local
+  multimodal model; no image is sent to a cloud model implicitly.
 * **True wake-word spotter** — swap the post-STT gate for openWakeWord/Porcupine.
 * **GPU visual core** — PySide6 + moderngl shader renderer behind the existing
   `CoreRenderer` interface; "visual evolution" that changes with usage.
 * **Plugin marketplace** — manifests already version + declare capabilities;
   add signing + a download path.
-* **Automatic desktop context** — optionally feed the on-demand active-window
-  awareness into model context with explicit privacy controls.
 * **Speaker identity** — local voice embeddings and capability-scoped authz.
 * **Adaptive personality** — tone/voice profiles in `config` + TTS selection.
 ```

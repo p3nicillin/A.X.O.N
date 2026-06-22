@@ -18,6 +18,8 @@ _RESERVED_STEMS = {"con", "prn", "aux", "nul",
 
 class ScreenshotSkill(Skill):
     def execute(self, intent: Intent) -> SkillResult:
+        if intent.type == "inspect_screen":
+            return self._inspect()
         if intent.type != "capture_screenshot":
             return self.fail(f"Unsupported screenshot action '{intent.type}'.")
         unknown = set(intent.parameters) - {"filename"}
@@ -69,6 +71,45 @@ class ScreenshotSkill(Skill):
         relative = destination.relative_to(DATA_DIR / "workspace")
         return self.ok(f"Screenshot saved to {relative}.",
                        speak="Screenshot captured, sir.", path=str(relative))
+
+    def _inspect(self) -> SkillResult:
+        try:
+            from PIL import ImageGrab
+        except ImportError:
+            return self.fail("Screen inspection requires Pillow.")
+        try:
+            image = ImageGrab.grab(all_screens=True)
+            width, height = image.size
+        except Exception as exc:
+            return self.fail(f"Screen inspection failed: {exc}",
+                             speak="I couldn't inspect the screen, sir.")
+        try:
+            from ..window_control.handler import _active_window_title
+            active_window = _active_window_title()
+        except Exception:
+            active_window = ""
+        text = ""
+        ocr_available = False
+        try:
+            import pytesseract
+            text = " ".join(pytesseract.image_to_string(
+                image, timeout=8).split())[:4000]
+            ocr_available = True
+        except Exception:
+            pass
+        summary = (f"Screen {width}×{height}"
+                   + (f" | active: {active_window}" if active_window else "")
+                   + (f" | text: {text[:500]}" if text else ""))
+        if text:
+            spoken = f"The active screen shows: {text[:600]}, sir."
+        elif active_window:
+            spoken = (f"The active window is {active_window}. Local OCR is not "
+                      "available for deeper reading, sir.")
+        else:
+            spoken = "I captured the screen, but local OCR is unavailable, sir."
+        return self.ok(summary, speak=spoken, width=width, height=height,
+                       active_window=active_window, text=text,
+                       ocr_available=ocr_available, persisted=False)
 
 
 SKILL = ScreenshotSkill()

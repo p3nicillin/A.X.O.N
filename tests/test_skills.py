@@ -160,6 +160,18 @@ def test_browser_skill_rejects_invalid_private_value():
     assert "boolean" in result.summary
 
 
+def test_browser_action_requires_and_controls_foreground_browser(monkeypatch):
+    calls = []
+    monkeypatch.setattr(browser_handler, "_send_browser_action",
+                        lambda action: calls.append(action) or True)
+
+    result = reg().execute(Intent(type="browser_action", parameters={
+        "action": "reopen_tab"}))
+
+    assert result.ok is True
+    assert calls == ["reopen_tab"]
+
+
 def test_filesystem_is_sandboxed():
     # path traversal must be refused
     res = reg().execute(Intent(type="list_files",
@@ -249,6 +261,24 @@ def test_screenshot_writes_png_inside_its_sandbox(tmp_path, monkeypatch):
         type="capture_screenshot", parameters={"filename": "safe-name"}))
     assert result.ok is True
     assert (sandbox / "safe-name.png").read_bytes() == b"png"
+
+
+def test_screen_inspection_is_ephemeral_and_returns_local_ocr(monkeypatch):
+    class FakeImage:
+        size = (1920, 1080)
+
+    monkeypatch.setitem(sys.modules, "PIL", SimpleNamespace(
+        ImageGrab=SimpleNamespace(grab=lambda **_kwargs: FakeImage())))
+    monkeypatch.setitem(sys.modules, "pytesseract", SimpleNamespace(
+        image_to_string=lambda image, timeout: "Project dashboard ready"))
+    monkeypatch.setattr(window_handler, "_active_window_title",
+                        lambda: "AXON")
+
+    result = screenshot_handler.SKILL.execute(Intent(type="inspect_screen"))
+
+    assert result.ok is True
+    assert result.data["text"] == "Project dashboard ready"
+    assert result.data["persisted"] is False
 
 
 def test_keyboard_rejects_empty_and_unknown_input_without_side_effects():

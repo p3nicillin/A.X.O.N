@@ -11,6 +11,8 @@ class Context:
         self.recalled: list[str] = []
         # §17 a short user-profile hint for the current turn.
         self.user_hint: str = ""
+        # Turn-scoped desktop state. This is never persisted as conversation.
+        self.desktop_hint: str = ""
 
     def add(self, user: str, assistant: str) -> None:
         self._turns.append((user, assistant))
@@ -22,6 +24,10 @@ class Context:
     def set_user_hint(self, hint: str) -> None:
         """Replace the per-turn §17 user-profile hint."""
         self.user_hint = hint or ""
+
+    def set_desktop_hint(self, hint: str) -> None:
+        """Replace the current active-window hint used by intent backends."""
+        self.desktop_hint = hint or ""
 
     def as_messages(self) -> list[dict]:
         msgs: list[dict] = []

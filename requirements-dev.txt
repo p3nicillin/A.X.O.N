@@ -1,3 +1,4 @@
 # Developer / CI tooling (not needed to run AXON)
 -r requirements.txt
 pytest>=8.0
+pyinstaller>=6.14

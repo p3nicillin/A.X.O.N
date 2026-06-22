@@ -51,6 +51,19 @@ def test_private_browser_and_browser_search_intents_parse():
         "query": "AXON voice commands", "browser": "Firefox"}
 
 
+def test_research_screen_and_browser_control_intents_parse():
+    research = parse("research local speech recognition")
+    page = parse("summarize webpage https://example.com/guide")
+
+    assert research.intent.type == "research_web"
+    assert research.intent.parameters["query"] == "local speech recognition"
+    assert page.intent.type == "read_webpage"
+    assert page.intent.parameters["url"] == "https://example.com/guide"
+    assert parse("what is on my screen").intent.type == "inspect_screen"
+    assert parse("reopen the closed tab").intent.type == "browser_action"
+    assert parse("browser back").intent.parameters["action"] == "back"
+
+
 def test_timer_and_relative_reminder_intents_parse():
     timer = parse("Set a timer for 5 minutes called tea")
     reminder = parse("Remind me in 20 minutes to check the oven")
@@ -126,6 +139,7 @@ def test_new_intents_have_command_categories():
     assert command_type_for("open_browser") == "WEB_NAVIGATION"
     assert command_type_for("set_timer") == "REMINDERS"
     assert command_type_for("network_status") == "SYSTEM_STATUS"
+    assert command_type_for("inspect_screen") == "SCREEN_PERCEPTION"
 
 
 def test_command_type_mapping_covers_six_categories():

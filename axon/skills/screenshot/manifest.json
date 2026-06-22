@@ -1,10 +1,11 @@
 {
   "name": "ScreenshotSkill",
-  "version": "1.0.0",
-  "description": "Captures the desktop to a PNG inside the sandbox workspace.",
-  "intents": ["capture_screenshot"],
+  "version": "1.1.0",
+  "description": "Captures screenshots or performs consent-gated local screen inspection with optional OCR.",
+  "intents": ["capture_screenshot", "inspect_screen"],
   "intent_params": {
-    "capture_screenshot": ["filename"]
+    "capture_screenshot": ["filename"],
+    "inspect_screen": []
   },
   "sensitive": true,
   "author": "core"

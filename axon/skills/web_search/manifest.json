@@ -1,10 +1,12 @@
 {
   "name": "WebSearchSkill",
-  "version": "1.0.0",
-  "description": "Answers quick factual queries and opens web searches in the browser.",
-  "intents": ["web_search"],
+  "version": "1.1.0",
+  "description": "Returns web answers, research sources, and bounded webpage text inside AXON without opening a browser.",
+  "intents": ["web_search", "research_web", "read_webpage"],
   "intent_params": {
-    "web_search": ["query"]
+    "web_search": ["query"],
+    "research_web": ["query"],
+    "read_webpage": ["url"]
   },
   "sensitive": false,
   "author": "core"

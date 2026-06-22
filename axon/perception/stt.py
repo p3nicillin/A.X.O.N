@@ -15,10 +15,14 @@ from __future__ import annotations
 import json
 import math
 import threading
+import time
+import wave
 from pathlib import Path
 
-from ..config import Config
+from ..config import DATA_DIR, Config
 from .speech_profile import SpeechProfile
+
+VOICE_SAMPLES_DIR = DATA_DIR / "voice_samples"
 
 try:
     import vosk
@@ -185,9 +189,7 @@ class SttEngine:
             segments, info = self._whisper.transcribe(
                 audio, language="en", beam_size=5, vad_filter=False,
                 condition_on_previous_text=False,
-                initial_prompt=("AXON voice assistant. What is the time? "
-                                "What is the weather? Open Notepad. "
-                                "System status. Calculate."),
+                initial_prompt=self._initial_prompt(),
             )
             segments = list(segments)
             text = " ".join(segment.text.strip() for segment in segments).strip()
@@ -195,6 +197,7 @@ class SttEngine:
                            for segment in segments]
             conf = (sum(confidences) / len(confidences) if confidences else
                     float(getattr(info, "language_probability", 0.0) or 0.0))
+            self._save_voice_sample(bytes(self._command_pcm), text, conf)
             self.reset_command()
             return self.profile.apply(text), max(0.0, min(1.0, conf))
         res = json.loads(self._cmd.FinalResult())
@@ -204,6 +207,50 @@ class SttEngine:
             1.0 if text else 0.0)
         self.reset_command()
         return self.profile.apply(text), conf
+
+    def _initial_prompt(self) -> str:
+        base = ("AXON voice assistant. What is the time? What is the weather? "
+                "Open Notepad. System status. Calculate. Set a reminder.")
+        snapshot = getattr(self.profile, "snapshot", lambda: [])()
+        expected = [str(item.get("expected", "")) for item in snapshot[:30]
+                    if isinstance(item, dict) and item.get("expected")]
+        return base + (" Personal command phrases: " + ". ".join(expected)
+                       if expected else "")
+
+    def _save_voice_sample(self, pcm: bytes, transcript: str,
+                           confidence: float) -> None:
+        if not getattr(self.config, "voice_sample_collection", False) or not pcm:
+            return
+        try:
+            VOICE_SAMPLES_DIR.mkdir(parents=True, exist_ok=True)
+            stamp = time.strftime("%Y%m%d-%H%M%S")
+            stem = f"sample-{stamp}-{time.time_ns() % 1_000_000:06d}"
+            path = VOICE_SAMPLES_DIR / f"{stem}.wav"
+            with wave.open(str(path), "wb") as audio:
+                audio.setnchannels(1)
+                audio.setsampwidth(2)
+                audio.setframerate(self.config.sample_rate)
+                audio.writeframes(pcm)
+            metadata = VOICE_SAMPLES_DIR / f"{stem}.json"
+            metadata.write_text(json.dumps({
+                "transcript": transcript[:500],
+                "confidence": round(float(confidence), 4),
+                "sample_rate": self.config.sample_rate,
+            }, indent=2), encoding="utf-8")
+        except OSError:
+            pass
+
+    @staticmethod
+    def clear_voice_samples() -> int:
+        count = 0
+        if VOICE_SAMPLES_DIR.exists():
+            for path in VOICE_SAMPLES_DIR.glob("sample-*.*"):
+                try:
+                    path.unlink()
+                    count += 1
+                except OSError:
+                    pass
+        return count
 
     # -- wake recogniser -----------------------------------------------------
     def reset_wake(self) -> None:

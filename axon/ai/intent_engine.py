@@ -259,7 +259,25 @@ class LocalIntentEngine:
                 r"\b(read|show|what(?:'s| is)?|paste|whats)\b", t):
             return packet("read clipboard", "read_clipboard", {}, "")
 
+        # --- in-app web research and bounded page reading -----------------
+        m = re.search(
+            r"\b(?:read|summari[sz]e|extract)(?: this| the)? (?:webpage|page|url)"
+            r"\s+(https?://\S+)", text, re.IGNORECASE)
+        if m:
+            return packet("read webpage", "read_webpage",
+                          {"url": m.group(1).rstrip(".,!?")}, "")
+        m = re.search(
+            r"\b(?:research|investigate|find sources (?:for|about))\s+(.+)$",
+            text, re.IGNORECASE)
+        if m:
+            return packet("in-app research", "research_web",
+                          {"query": m.group(1).strip(" .!?")}, "")
+
         # --- explicit screen capture (saved only inside the workspace) ---
+        if re.search(r"\b(?:what(?:'s| is) on (?:my|the) screen|"
+                     r"inspect (?:my|the) screen|read (?:my|the) screen|"
+                     r"describe (?:my|the) screen)\b", t):
+            return packet("inspect screen", "inspect_screen", {}, "")
         m = re.search(
             r"\b(?:take|capture|save)(?: a)? screenshot(?: (?:called|named)\s+([^\\/:*?\"<>|]+))?\b",
             text, re.IGNORECASE)
@@ -373,6 +391,22 @@ class LocalIntentEngine:
                           {"path": (m.group(1) or "").strip()}, "")
 
         # --- browser search / private browser windows ----------------------
+        browser_actions = (
+            (r"\b(?:open|create)(?: a)? new tab\b", "new_tab"),
+            (r"\bclose(?: the| this)? tab\b", "close_tab"),
+            (r"\b(?:reopen|restore)(?: the)? (?:last |closed )?tab\b",
+             "reopen_tab"),
+            (r"\b(?:reload|refresh)(?: the| this)? (?:page|tab)?\b", "reload"),
+            (r"\b(?:browser )?(?:go )?back\b", "back"),
+            (r"\b(?:browser )?(?:go )?forward\b", "forward"),
+            (r"\b(?:open|show)(?: browser)? downloads\b", "downloads"),
+            (r"\b(?:open|show)(?: browser)? history\b", "history"),
+            (r"\bfind on (?:the |this )?page\b", "find"),
+        )
+        for pattern, action in browser_actions:
+            if re.search(pattern, t):
+                return packet("browser control", "browser_action",
+                              {"action": action}, "")
         m = re.search(
             r"^\s*(?:open|launch|start)\s+(.+?)\s*[.!]?$",
             text, re.IGNORECASE)

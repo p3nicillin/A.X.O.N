@@ -86,6 +86,9 @@ class LocalLLMBackend(IntentBackend):
                       "invent capabilities from it):\n" + facts)
         if getattr(context, "user_hint", ""):
             extra += "\nUser profile (bias tone only): " + context.user_hint
+        if getattr(context, "desktop_hint", ""):
+            extra += ("\nCurrent desktop context (read-only; do not infer hidden "
+                      "content): " + context.desktop_hint)
         return build_system_prompt(specs, extra=extra)
 
     def parse(self, transcript: str, context: Context,

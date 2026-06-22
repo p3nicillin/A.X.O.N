@@ -1,31 +1,6 @@
 # Copy to "config.toml" and edit. Every setting is optional; environment
 # variables (AXON_<NAME>, and ANTHROPIC_API_KEY) override these.
 
-# --- AI core ---------------------------------------------------------------
-# A.X.O.N is FREE and LOCAL by default: intent parsing runs on a local LLM on
-# your own machine, so no API key is required and no transcript leaves the
-# device. The cloud (Claude) backend is OPTIONAL and OFF by default.
-[ai]
-engine = "local"             # auto | local | cloud | rules
-fallback = ["local", "rules"]   # tried in order; rules is the guaranteed bottom
-hybrid_fastpath = true       # match simple commands with rules, skip the LLM
-warm_on_start = true         # preload the model at boot for a fast first command
-
-[ai.local]
-runtime = "ollama"           # ollama | llamacpp | openai_compatible
-endpoint = "http://localhost:11434"
-model = "llama3.2:3b"        # baseline 3B runs on almost anything; see README tiers
-temperature = 0.1
-keep_alive = "30m"
-timeout_ms = 10000
-
-[ai.cloud]
-enabled = false              # opt-in only; a material privacy change when true
-model = "claude-haiku-4-5-20251001"
-# The API key is NEVER stored here. Set the ANTHROPIC_API_KEY environment
-# variable, or store it in your OS credential manager (service "AXON",
-# username "anthropic_api_key") via the optional `keyring` package.
-
 # --- Speech to text ---------------------------------------------------------
 # Path to an unpacked Vosk model. If empty, AXON auto-detects any model
 # folder under ./models/ . See README "Speech-to-text setup".
@@ -34,6 +9,10 @@ stt_engine = "auto"             # auto prefers faster-whisper, then Vosk
 stt_whisper_model = "small.en"  # downloaded once into models/whisper
 stt_whisper_device = "cpu"      # set cuda after installing CUDA runtime libs
 stt_whisper_compute_type = "int8"
+speech_confidence_threshold = 0.45 # ask before acting on uncertain transcripts
+voice_sample_collection = false   # opt-in local WAV samples for future fine-tuning
+desktop_context_enabled = true     # active-window title informs intent parsing
+tray_enabled = true                # restore/minimise support in the system tray
 
 # --- Voice activity detection ----------------------------------------------
 vad_start_rms = 0.012    # raise if it triggers on background noise
@@ -64,6 +43,30 @@ audit_enabled = true
 audit_retention_days = 90
 crash_reporting_enabled = true  # local redacted JSON only; never uploaded
 crash_retention_days = 30
+
+# --- AI core ---------------------------------------------------------------
+# Tables are intentionally last: TOML keys following [ai.cloud] would otherwise
+# belong to that table instead of the top-level Config object.
+[ai]
+engine = "local"             # auto | local | cloud | rules
+fallback = ["local", "rules"]   # tried in order; rules is the guaranteed bottom
+hybrid_fastpath = true       # match simple commands with rules, skip the LLM
+warm_on_start = true         # preload the model at boot for a fast first command
+
+[ai.local]
+runtime = "ollama"           # ollama | llamacpp | openai_compatible
+endpoint = "http://localhost:11434"
+model = "llama3.2:3b"        # baseline 3B runs on almost anything; see README tiers
+temperature = 0.1
+keep_alive = "30m"
+timeout_ms = 10000
+
+[ai.cloud]
+enabled = false              # opt-in only; a material privacy change when true
+model = "claude-haiku-4-5-20251001"
+# The API key is NEVER stored here. Set the ANTHROPIC_API_KEY environment
+# variable, or store it in your OS credential manager (service "AXON",
+# username "anthropic_api_key") via the optional `keyring` package.
 
 # UI changes to voice/persona/backend are stored separately in
 # data/user_settings.json. AXON_* environment variables remain authoritative.

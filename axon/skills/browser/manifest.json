@@ -1,12 +1,13 @@
 {
   "name": "BrowserSkill",
-  "version": "1.1.0",
-  "description": "Opens websites, browser searches, and normal or private browser windows.",
-  "intents": ["open_website", "search_browser", "open_browser"],
+  "version": "1.2.0",
+  "description": "Opens websites and controls verified foreground browser tabs with bounded actions.",
+  "intents": ["open_website", "search_browser", "open_browser", "browser_action"],
   "intent_params": {
     "open_website": ["site", "browser", "private"],
     "search_browser": ["query", "browser", "private"],
-    "open_browser": ["browser", "private"]
+    "open_browser": ["browser", "private"],
+    "browser_action": ["action"]
   },
   "sensitive": false,
   "author": "core"

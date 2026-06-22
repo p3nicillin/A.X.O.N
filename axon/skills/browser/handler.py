@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import webbrowser
+import sys
 from pathlib import Path
 from urllib.parse import quote_plus, urlparse
 
@@ -33,6 +34,18 @@ _PRIVATE_FLAGS = {
     "msedge.exe": "--inprivate",
     "firefox.exe": "-private-window",
 }
+_BROWSER_ACTIONS = {
+    "new_tab": (0x11, ord("T")),
+    "close_tab": (0x11, ord("W")),
+    "reopen_tab": (0x11, 0x10, ord("T")),
+    "reload": (0x11, ord("R")),
+    "back": (0x12, 0x25),
+    "forward": (0x12, 0x27),
+    "downloads": (0x11, ord("J")),
+    "history": (0x11, ord("H")),
+    "find": (0x11, ord("F")),
+}
+_BROWSER_PROCESSES = {"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe"}
 
 
 def _url_for(site: str) -> str | None:
@@ -94,8 +107,46 @@ def _private_browser(preferred: str = "") -> tuple[str, str] | None:
     return None
 
 
+def _foreground_browser() -> str | None:
+    if sys.platform != "win32":
+        return None
+    try:
+        import ctypes
+        import psutil
+        hwnd = ctypes.windll.user32.GetForegroundWindow()
+        pid = ctypes.c_ulong()
+        ctypes.windll.user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        name = psutil.Process(pid.value).name().lower()
+        return name if name in _BROWSER_PROCESSES else None
+    except Exception:
+        return None
+
+
+def _send_browser_action(action: str) -> bool:
+    keys = _BROWSER_ACTIONS.get(action)
+    if not keys or _foreground_browser() is None:
+        return False
+    import ctypes
+    user32 = ctypes.windll.user32
+    for key in keys:
+        user32.keybd_event(key, 0, 0, 0)
+    for key in reversed(keys):
+        user32.keybd_event(key, 0, 0x0002, 0)
+    return True
+
+
 class BrowserSkill(Skill):
     def execute(self, intent: Intent) -> SkillResult:
+        if intent.type == "browser_action":
+            action = str(intent.get("action", "")).strip().lower()
+            if action not in _BROWSER_ACTIONS:
+                return self.fail("That browser action is not supported.")
+            if not _send_browser_action(action):
+                return self.fail("A supported browser must be the active window.",
+                                 speak="Please focus the browser first, sir.")
+            phrase = action.replace("_", " ").title()
+            return self.ok(f"Browser action: {phrase}.",
+                           speak=f"{phrase}, sir.", action=action)
         try:
             private = _private_value(intent.get("private", False))
         except ValueError as exc:

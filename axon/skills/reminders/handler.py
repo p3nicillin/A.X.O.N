@@ -87,8 +87,30 @@ class ReminderSkill(Skill):
             bus = self._bus
         if bus is not None:
             for item in due:
+                if self._thread is not None and self._thread.is_alive():
+                    self._notify(item)
                 bus.publish(Event.REMINDER_DUE, item)
         return due
+
+    @staticmethod
+    def _notify(item: dict) -> None:
+        """Best-effort native toast; the in-app event remains authoritative."""
+        try:
+            from winotify import Notification
+            Notification(app_id="AXON", title="AXON reminder",
+                         msg=str(item.get("label", "Reminder")),
+                         duration="short").show()
+        except Exception:
+            try:
+                import winsound
+                winsound.MessageBeep(winsound.MB_ICONASTERISK)
+            except Exception:
+                pass
+
+    def snapshot(self) -> list[dict]:
+        with self._lock:
+            return sorted((item.copy() for item in self._items.values()),
+                          key=lambda item: item["due"])
 
     def execute(self, intent: Intent) -> SkillResult:
         if intent.type in {"set_timer", "set_reminder"}:

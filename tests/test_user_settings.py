@@ -1,9 +1,22 @@
 import json
+import tomllib
+from pathlib import Path
 
 import pytest
 
 from axon import config as config_module
 from axon.config import Config
+
+
+def test_example_config_keeps_runtime_settings_top_level():
+    path = Path(__file__).resolve().parent.parent / "config.example.toml"
+    with path.open("rb") as handle:
+        data = tomllib.load(handle)
+
+    assert data["stt_engine"] == "auto"
+    assert data["desktop_context_enabled"] is True
+    assert data["ai"]["cloud"]["enabled"] is False
+    assert "stt_engine" not in data["ai"]["cloud"]
 
 
 def test_user_settings_persist_atomically_and_reload(tmp_path, monkeypatch):
@@ -14,7 +27,7 @@ def test_user_settings_persist_atomically_and_reload(tmp_path, monkeypatch):
     saved = cfg.update_user_settings({
         "tts_voice": "Hazel", "tts_rate": 210,
         "address_term": "ma'am", "wake_ack_phrase": "Ready.",
-        "require_wake_word": True,
+        "require_wake_word": True, "voice_sample_collection": True,
     })
 
     assert saved["tts_rate"] == 210
@@ -23,6 +36,7 @@ def test_user_settings_persist_atomically_and_reload(tmp_path, monkeypatch):
     reloaded = Config.load()
     assert reloaded.tts_rate == 210
     assert reloaded.address_term == "ma'am"
+    assert reloaded.voice_sample_collection is True
 
 
 def test_environment_override_is_reported_as_locked(tmp_path, monkeypatch):
@@ -39,6 +53,7 @@ def test_environment_override_is_reported_as_locked(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("change", [
     {"tts_rate": 20}, {"require_wake_word": "yes"},
+    {"voice_sample_collection": "yes"},
     {"ai_engine": "untrusted"}, {"secret_key": "no"},
 ])
 def test_user_settings_reject_invalid_values(tmp_path, monkeypatch, change):
