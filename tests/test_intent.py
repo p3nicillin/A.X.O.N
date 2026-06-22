@@ -64,6 +64,27 @@ def test_research_screen_and_browser_control_intents_parse():
     assert parse("browser back").intent.parameters["action"] == "back"
 
 
+def test_managed_browser_intents_are_distinct_and_structured():
+    navigate = parse("open https://example.com in the managed browser")
+    clicked = parse("click Sign in in the managed browser")
+    filled = parse("fill email field with user@example.com in the managed browser")
+
+    assert navigate.intent.type == "browser_navigate"
+    assert parse("read the current page").intent.type == "browser_read_page"
+    assert clicked.intent.parameters == {"target": "Sign in"}
+    assert filled.intent.parameters == {
+        "field": "email", "text": "user@example.com"}
+    assert parse("close the managed browser").intent.type == \
+        "browser_close_managed"
+
+
+def test_screen_inspection_preserves_user_question():
+    packet = parse("inspect my screen for error messages")
+
+    assert packet.intent.type == "inspect_screen"
+    assert packet.intent.parameters == {"prompt": "error messages"}
+
+
 def test_timer_and_relative_reminder_intents_parse():
     timer = parse("Set a timer for 5 minutes called tea")
     reminder = parse("Remind me in 20 minutes to check the oven")

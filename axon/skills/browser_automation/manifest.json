@@ -1,0 +1,16 @@
+{
+  "name": "BrowserAutomationSkill",
+  "version": "1.0.0",
+  "description": "Controls an isolated Playwright browser for visible navigation, page reading, guarded clicks, and form filling.",
+  "intents": ["browser_navigate", "browser_read_page", "browser_click", "browser_fill", "browser_close_managed"],
+  "intent_params": {
+    "browser_navigate": ["url"],
+    "browser_read_page": [],
+    "browser_click": ["target"],
+    "browser_fill": ["field", "text"],
+    "browser_close_managed": []
+  },
+  "sensitive_intents": ["browser_click", "browser_fill"],
+  "sensitive": false,
+  "author": "core"
+}

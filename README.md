@@ -233,6 +233,7 @@ version, declared intents, skill/intent sensitivity) and a `handler.py` exposing
 | TimeDate | `get_time`, `get_date` | |
 | AppLauncher | `open_app`, `close_app` | named Windows applications; closing requires confirmation |
 | Browser | `open_website`, `search_browser`, `open_browser`, `browser_action` | validated navigation plus verified-foreground tab/history/download controls |
+| BrowserAutomation | `browser_navigate`, `browser_read_page`, `browser_click`, `browser_fill`, `browser_close_managed` | isolated visible Playwright browser; DOM mutations require confirmation and private-network requests are blocked |
 | SystemInfo | `system_info` | also feeds the HUD gauges |
 | System awareness | `list_running_apps`, `network_status` | running process names and local interface/IP status remain inside AXON |
 | WebSearch | `web_search`, `research_web`, `read_webpage` | sourced results and bounded public-page text stay inside AXON; no browser fallback |
@@ -245,7 +246,7 @@ version, declared intents, skill/intent sensitivity) and a `handler.py` exposing
 | VolumeControl | `volume_up`, `volume_down`, `mute_toggle` | adjustment steps are clamped |
 | WindowControl | `get_active_window`, `list_windows`, `focus_window`, `minimize_window`, `maximize_window`, `restore_window`, `close_window` | foreground/open-window awareness and control; graceful close requires confirmation |
 | Clipboard | `read_clipboard`, `set_clipboard` | writes require confirmation; reads return a bounded preview |
-| Screenshot | `capture_screenshot`, `inspect_screen` | confirmed sandbox capture or ephemeral local OCR; inspection is never persisted |
+| Screenshot | `capture_screenshot`, `inspect_screen` | confirmed sandbox capture or ephemeral local Gemma 3 analysis with OCR fallback; inspection is never persisted |
 | Keyboard | `type_text`, `send_keystroke` | bounded, allow-listed, and always confirmed |
 
 **Add a skill:** copy a folder, edit `manifest.json` + `handler.py`, restart.
@@ -292,10 +293,27 @@ Packaged builds keep mutable data and downloaded speech models under
 `%LOCALAPPDATA%\AXON`; source checkouts continue using the repository `data/`
 and `models/` directories.
 
+### v1.4 capability setup
+
+Run `scripts/setup_v14_capabilities.ps1` once to install Playwright Chromium and
+pull the local `gemma3:4b` vision model. Then set `vision_enabled = true` in
+`config.toml`. Screen images are sent only to the configured loopback Ollama
+endpoint and are never persisted by `inspect_screen`.
+
+The managed browser is separate from personal browser profiles. It blocks
+private/local network destinations and downloads; clicks and form filling pass
+through AXON's spoken confirmation gate. Example commands include “open
+https://example.com in the managed browser”, “read the current page”, “click
+Sign in in the managed browser”, and “fill email with … in the managed browser”.
+
+Run `python scripts/benchmark_commands.py --minimum 0.98` to execute the
+checked-in command corpus. CI requires at least 98% accuracy and publishes the
+latency/miss report for every change.
+
 ## 8. Future roadmap
 
-* **Full visual semantics** — upgrade ephemeral OCR to a configured local
-  multimodal model; no image is sent to a cloud model implicitly.
+* **Visual action grounding** — add element coordinates and post-action visual
+  verification on top of the shipped local multimodal analysis.
 * **True wake-word spotter** — swap the post-STT gate for openWakeWord/Porcupine.
 * **GPU visual core** — PySide6 + moderngl shader renderer behind the existing
   `CoreRenderer` interface; "visual evolution" that changes with usage.

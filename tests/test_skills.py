@@ -11,6 +11,7 @@ from axon.skills.screenshot import handler as screenshot_handler
 from axon.skills.browser import handler as browser_handler
 from axon.skills.app_launcher import handler as app_handler
 from axon.skills.reminders.handler import ReminderSkill
+from axon.skills.browser_automation import handler as automation_handler
 from axon.core.event_bus import Event, EventBus
 
 
@@ -170,6 +171,37 @@ def test_browser_action_requires_and_controls_foreground_browser(monkeypatch):
 
     assert result.ok is True
     assert calls == ["reopen_tab"]
+
+
+def test_managed_browser_validates_and_returns_worker_result(monkeypatch):
+    calls = []
+
+    class FakeWorker:
+        def perform(self, action, parameters):
+            calls.append((action, parameters))
+            return {"ok": True, "title": "Example", "url": parameters["url"]}
+
+        def stop(self):
+            pass
+
+    skill = reg().route(Intent(type="browser_navigate"))
+    monkeypatch.setattr(skill, "worker", FakeWorker())
+    monkeypatch.setattr(automation_handler, "_public_url", lambda url: url)
+
+    result = skill.execute(Intent(type="browser_navigate", parameters={
+        "url": "https://example.com"}))
+
+    assert result.ok is True
+    assert calls == [("navigate", {"url": "https://example.com"})]
+
+
+def test_managed_browser_mutating_dom_actions_are_sensitive():
+    manifest = next(m for m in reg().catalogue()
+                    if m.name == "BrowserAutomationSkill")
+
+    assert manifest.is_sensitive("browser_click") is True
+    assert manifest.is_sensitive("browser_fill") is True
+    assert manifest.is_sensitive("browser_read_page") is False
 
 
 def test_filesystem_is_sandboxed():

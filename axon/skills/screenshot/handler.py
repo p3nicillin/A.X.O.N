@@ -17,9 +17,21 @@ _RESERVED_STEMS = {"con", "prn", "aux", "nul",
 
 
 class ScreenshotSkill(Skill):
+    def __init__(self) -> None:
+        self.config = None
+
+    def configure(self, config) -> None:
+        self.config = config
+
+    def vision_status(self) -> dict:
+        enabled = bool(getattr(self.config, "vision_enabled", False))
+        return {"enabled": enabled,
+                "model": getattr(self.config, "vision_model", "") if enabled else "",
+                "endpoint": getattr(self.config, "vision_endpoint", "") if enabled else ""}
+
     def execute(self, intent: Intent) -> SkillResult:
         if intent.type == "inspect_screen":
-            return self._inspect()
+            return self._inspect(intent)
         if intent.type != "capture_screenshot":
             return self.fail(f"Unsupported screenshot action '{intent.type}'.")
         unknown = set(intent.parameters) - {"filename"}
@@ -72,7 +84,7 @@ class ScreenshotSkill(Skill):
         return self.ok(f"Screenshot saved to {relative}.",
                        speak="Screenshot captured, sir.", path=str(relative))
 
-    def _inspect(self) -> SkillResult:
+    def _inspect(self, intent: Intent) -> SkillResult:
         try:
             from PIL import ImageGrab
         except ImportError:
@@ -88,6 +100,14 @@ class ScreenshotSkill(Skill):
             active_window = _active_window_title()
         except Exception:
             active_window = ""
+        vision = {"ok": False, "error": "local vision is disabled"}
+        if bool(getattr(self.config, "vision_enabled", False)):
+            from ...perception.vision import LocalVisionClient
+            client = LocalVisionClient(
+                getattr(self.config, "vision_endpoint", ""),
+                getattr(self.config, "vision_model", ""),
+                getattr(self.config, "vision_timeout", 30.0))
+            vision = client.analyze(image, str(intent.get("prompt", "")))
         text = ""
         ocr_available = False
         try:
@@ -97,10 +117,14 @@ class ScreenshotSkill(Skill):
             ocr_available = True
         except Exception:
             pass
+        analysis = str(vision.get("analysis", "")) if vision.get("ok") else ""
         summary = (f"Screen {width}×{height}"
                    + (f" | active: {active_window}" if active_window else "")
+                   + (f" | analysis: {analysis[:1000]}" if analysis else "")
                    + (f" | text: {text[:500]}" if text else ""))
-        if text:
+        if analysis:
+            spoken = f"{analysis[:900]}, sir."
+        elif text:
             spoken = f"The active screen shows: {text[:600]}, sir."
         elif active_window:
             spoken = (f"The active window is {active_window}. Local OCR is not "
@@ -109,7 +133,10 @@ class ScreenshotSkill(Skill):
             spoken = "I captured the screen, but local OCR is unavailable, sir."
         return self.ok(summary, speak=spoken, width=width, height=height,
                        active_window=active_window, text=text,
-                       ocr_available=ocr_available, persisted=False)
+                       analysis=analysis, ocr_available=ocr_available,
+                       vision_model=vision.get("model", ""),
+                       vision_error="" if vision.get("ok") else vision.get("error", ""),
+                       persisted=False)
 
 
 SKILL = ScreenshotSkill()

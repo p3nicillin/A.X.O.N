@@ -78,7 +78,8 @@ class AIConfig:
 class Config:
     USER_SETTING_NAMES: ClassVar[frozenset[str]] = frozenset({
         "tts_voice", "tts_rate", "address_term", "wake_ack_phrase",
-        "require_wake_word", "voice_sample_collection", "ai_engine",
+        "require_wake_word", "voice_sample_collection", "vision_enabled",
+        "ai_engine",
     })
     # --- AI intent engine ---
     anthropic_api_key: str = ""   # legacy; prefer ANTHROPIC_API_KEY / secrets store
@@ -165,6 +166,16 @@ class Config:
     user_model_enabled: bool = True   # infer a persistent profile to bias replies
     desktop_context_enabled: bool = True  # inject active-window title into intent context
 
+    # --- Local visual perception (explicit opt-in, loopback endpoints only) ---
+    vision_enabled: bool = False
+    vision_endpoint: str = "http://127.0.0.1:11434"
+    vision_model: str = "gemma3:4b"
+    vision_timeout: float = 120.0
+
+    # --- Isolated browser automation ---
+    browser_automation_headless: bool = False
+    browser_automation_timeout: float = 20.0
+
     # --- Autonomy (§16, opt-in: observes the system, suggestion-only) ---
     autonomy_enabled: bool = False    # background context awareness + suggestions
     autonomy_interval: float = 5.0    # seconds between context ticks
@@ -240,7 +251,8 @@ class Config:
                 value = int(value)
                 if not 80 <= value <= 350:
                     raise ValueError("tts_rate must be between 80 and 350")
-            elif name in {"require_wake_word", "voice_sample_collection"}:
+            elif name in {"require_wake_word", "voice_sample_collection",
+                          "vision_enabled"}:
                 if not isinstance(value, bool):
                     raise ValueError(f"{name} must be boolean")
             elif name == "ai_engine":
@@ -300,6 +312,7 @@ class Config:
             "wake_ack_phrase": self.wake_ack_phrase,
             "require_wake_word": self.require_wake_word,
             "voice_sample_collection": self.voice_sample_collection,
+            "vision_enabled": self.vision_enabled,
             "ai_engine": self.ai.engine,
             "locked": sorted(getattr(self, "_env_locked", set())
                              & self.USER_SETTING_NAMES),

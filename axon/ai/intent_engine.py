@@ -273,7 +273,14 @@ class LocalIntentEngine:
             return packet("in-app research", "research_web",
                           {"query": m.group(1).strip(" .!?")}, "")
 
-        # --- explicit screen capture (saved only inside the workspace) ---
+        # --- explicit screen capture / local multimodal inspection ---------
+        m = re.search(
+            r"\b(?:inspect|analyse|analyze|read|describe) (?:my|the) screen"
+            r"(?:\s+(?:for|and tell me|to find)\s+(.+))?$",
+            text, re.IGNORECASE)
+        if m:
+            params = {"prompt": m.group(1).strip(" .!?")} if m.group(1) else {}
+            return packet("inspect screen", "inspect_screen", params, "")
         if re.search(r"\b(?:what(?:'s| is) on (?:my|the) screen|"
                      r"inspect (?:my|the) screen|read (?:my|the) screen|"
                      r"describe (?:my|the) screen)\b", t):
@@ -391,6 +398,33 @@ class LocalIntentEngine:
                           {"path": (m.group(1) or "").strip()}, "")
 
         # --- browser search / private browser windows ----------------------
+        m = re.search(
+            r"\b(?:open|navigate|browse|go to)\s+(https?://\S+|"
+            r"[a-z0-9.-]+\.[a-z]{2,}(?:/\S*)?)\s+(?:in|with|using)\s+"
+            r"(?:the\s+)?(?:managed|automation|playwright) browser\b",
+            text, re.IGNORECASE)
+        if m:
+            return packet("managed browser navigation", "browser_navigate",
+                          {"url": m.group(1).rstrip(".,!?")}, "")
+        if re.search(r"\b(?:read|summari[sz]e|inspect)\s+"
+                     r"(?:the current|this|the|current)\s+"
+                     r"(?:managed\s+)?(?:page|webpage)\b", t):
+            return packet("read managed page", "browser_read_page", {}, "")
+        m = re.search(r"\bclick\s+(.+?)(?:\s+in (?:the )?managed browser)?[.!]?$",
+                      text, re.IGNORECASE)
+        if m:
+            return packet("managed browser click", "browser_click",
+                          {"target": m.group(1).strip(" .!?")}, "")
+        m = re.search(
+            r"\bfill\s+(?:the\s+)?(.+?)(?:\s+field)?\s+with\s+(.+?)"
+            r"(?:\s+in (?:the )?managed browser)?[.!]?$",
+            text, re.IGNORECASE)
+        if m:
+            return packet("managed browser fill", "browser_fill", {
+                "field": m.group(1).strip(), "text": m.group(2).strip()}, "")
+        if re.search(r"\bclose (?:the )?(?:managed|automation|playwright) browser\b",
+                     t):
+            return packet("close managed browser", "browser_close_managed", {}, "")
         browser_actions = (
             (r"\b(?:open|create)(?: a)? new tab\b", "new_tab"),
             (r"\bclose(?: the| this)? tab\b", "close_tab"),

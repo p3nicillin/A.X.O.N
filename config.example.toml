@@ -13,6 +13,12 @@ speech_confidence_threshold = 0.45 # ask before acting on uncertain transcripts
 voice_sample_collection = false   # opt-in local WAV samples for future fine-tuning
 desktop_context_enabled = true     # active-window title informs intent parsing
 tray_enabled = true                # restore/minimise support in the system tray
+vision_enabled = false             # enable after installing a local vision model
+vision_endpoint = "http://127.0.0.1:11434"
+vision_model = "gemma3:4b"
+vision_timeout = 120.0             # CPU cold starts can take over a minute
+browser_automation_headless = false # visible isolated Playwright browser
+browser_automation_timeout = 20.0
 
 # --- Voice activity detection ----------------------------------------------
 vad_start_rms = 0.012    # raise if it triggers on background noise

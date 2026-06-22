@@ -249,7 +249,7 @@ class Orchestrator:
     def update_user_settings(self, changes: dict) -> dict:
         allowed = {"tts_voice", "tts_rate", "address_term",
                    "wake_ack_phrase", "require_wake_word",
-                   "voice_sample_collection"}
+                   "voice_sample_collection", "vision_enabled"}
         if set(changes) - allowed:
             return {"ok": False, "error": "unsupported live setting"}
         try:

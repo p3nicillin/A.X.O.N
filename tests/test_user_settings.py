@@ -28,6 +28,7 @@ def test_user_settings_persist_atomically_and_reload(tmp_path, monkeypatch):
         "tts_voice": "Hazel", "tts_rate": 210,
         "address_term": "ma'am", "wake_ack_phrase": "Ready.",
         "require_wake_word": True, "voice_sample_collection": True,
+        "vision_enabled": True,
     })
 
     assert saved["tts_rate"] == 210
@@ -37,6 +38,7 @@ def test_user_settings_persist_atomically_and_reload(tmp_path, monkeypatch):
     assert reloaded.tts_rate == 210
     assert reloaded.address_term == "ma'am"
     assert reloaded.voice_sample_collection is True
+    assert reloaded.vision_enabled is True
 
 
 def test_environment_override_is_reported_as_locked(tmp_path, monkeypatch):
@@ -54,6 +56,7 @@ def test_environment_override_is_reported_as_locked(tmp_path, monkeypatch):
 @pytest.mark.parametrize("change", [
     {"tts_rate": 20}, {"require_wake_word": "yes"},
     {"voice_sample_collection": "yes"},
+    {"vision_enabled": "yes"},
     {"ai_engine": "untrusted"}, {"secret_key": "no"},
 ])
 def test_user_settings_reject_invalid_values(tmp_path, monkeypatch, change):

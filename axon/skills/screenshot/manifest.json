@@ -1,11 +1,11 @@
 {
   "name": "ScreenshotSkill",
-  "version": "1.1.0",
-  "description": "Captures screenshots or performs consent-gated local screen inspection with optional OCR.",
+  "version": "1.2.0",
+  "description": "Captures screenshots or performs consent-gated local multimodal screen inspection with OCR fallback.",
   "intents": ["capture_screenshot", "inspect_screen"],
   "intent_params": {
     "capture_screenshot": ["filename"],
-    "inspect_screen": []
+    "inspect_screen": ["prompt"]
   },
   "sensitive": true,
   "author": "core"

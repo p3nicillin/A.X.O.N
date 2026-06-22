@@ -16,6 +16,7 @@ jobs:
           cache: pip
       - run: pip install -r requirements-dev.txt
       - run: python -m pytest -q
+      - run: python scripts/benchmark_commands.py --minimum 0.98
       - run: python -m PyInstaller --noconfirm --clean AXON.spec
       - name: Import signing certificate
         if: ${{ secrets.AXON_SIGN_CERT_BASE64 != '' }}

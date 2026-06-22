@@ -12,4 +12,4 @@ internals, which keeps every piece modular and independently testable:
     core/        -> event bus, state machine, orchestrator (the pipeline)
 """
 
-__version__ = "1.3.0"
+__version__ = "1.4.0"

@@ -350,7 +350,7 @@ class Bridge:
         if getattr(result, "skill", "") not in {
                 "WeatherSkill", "CalculatorSkill", "FileSystemSkill",
                 "SystemInfoSkill", "ScreenshotSkill", "WebSearchSkill",
-                "ReminderSkill"}:
+                "ReminderSkill", "BrowserAutomationSkill"}:
             return
         payload = {
             "ok": bool(getattr(result, "ok", False)),
@@ -543,6 +543,10 @@ class Bridge:
                 settings["shortcuts"] = sorted(set(app_launcher.ALIASES))
             elif m.name == "FileSystemSkill":
                 settings["sandbox_root"] = str(file_system.WORKSPACE)
+            elif m.name == "ScreenshotSkill" and hasattr(skill, "vision_status"):
+                settings.update(skill.vision_status())
+            elif m.name == "BrowserAutomationSkill" and hasattr(skill, "status"):
+                settings.update(skill.status())
             skills.append({
                 "name": m.name,
                 "version": m.version,
@@ -620,6 +624,8 @@ class Bridge:
                 "crash_reports": crash.get("count", 0),
                 "last_crash": ((crash.get("last") or {}).get("timestamp") or "none"),
                 "desktop_context": self.config.desktop_context_enabled,
+                "vision_enabled": self.config.vision_enabled,
+                "vision_model": self.config.vision_model,
                 "starts_with_windows": starts_with_windows,
                 "tray_enabled": self.config.tray_enabled,
                 "update": dict(self._update_status),
