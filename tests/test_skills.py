@@ -63,10 +63,13 @@ def test_app_launcher_rejects_empty_name():
     assert res.ok is False
 
 
-def test_app_launcher_opens_non_aliased_app():
-    # Whitelist removed: any named app passes through to the OS launcher.
+def test_app_launcher_opens_non_aliased_app(monkeypatch):
+    calls = []
+    monkeypatch.setattr(app_handler.subprocess, "Popen",
+                        lambda *args, **kwargs: calls.append((args, kwargs)))
     res = reg().execute(Intent(type="open_app", parameters={"app": "explorer"}))
     assert res.ok is True
+    assert calls
 
 
 def test_app_launcher_rejects_malformed_multiword_name_without_shell(
@@ -101,6 +104,46 @@ def test_browser_skill_rejects_non_url_command_text():
         "site": "youtube on google chrome && whoami"}))
 
     assert result.ok is False
+
+
+def test_browser_skill_opens_private_site_with_correct_flag(monkeypatch):
+    calls = []
+    monkeypatch.setattr(browser_handler, "_browser_executable",
+                        lambda browser: "C:/Chrome/chrome.exe")
+    monkeypatch.setattr(browser_handler.subprocess, "Popen",
+                        lambda args, **kwargs: calls.append((args, kwargs)))
+
+    result = reg().execute(Intent(type="open_website", parameters={
+        "site": "YouTube", "private": True}))
+
+    assert result.ok is True
+    assert calls[0][0] == ["C:/Chrome/chrome.exe", "--incognito",
+                           "https://www.youtube.com/"]
+    assert result.data["private"] is True
+
+
+def test_browser_skill_searches_with_encoded_query(monkeypatch):
+    calls = []
+    monkeypatch.setattr(browser_handler, "_browser_executable",
+                        lambda browser: "C:/Firefox/firefox.exe")
+    monkeypatch.setattr(browser_handler.subprocess, "Popen",
+                        lambda args, **kwargs: calls.append((args, kwargs)))
+
+    result = reg().execute(Intent(type="search_browser", parameters={
+        "query": "AXON voice commands", "browser": "Firefox",
+        "private": True}))
+
+    assert result.ok is True
+    assert calls[0][0] == ["C:/Firefox/firefox.exe", "-private-window",
+                           "https://www.google.com/search?q=AXON+voice+commands"]
+
+
+def test_browser_skill_rejects_invalid_private_value():
+    result = reg().execute(Intent(type="open_browser", parameters={
+        "private": "sometimes"}))
+
+    assert result.ok is False
+    assert "boolean" in result.summary
 
 
 def test_filesystem_is_sandboxed():

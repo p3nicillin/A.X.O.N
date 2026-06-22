@@ -32,6 +32,25 @@ def test_website_and_requested_browser_are_separate_from_app_name():
         "site": "YouTube", "browser": "Google Chrome"}
 
 
+def test_website_private_mode_is_parsed_without_becoming_an_app_name():
+    p = parse("Open YouTube in an incognito browser.")
+
+    assert p.intent.type == "open_website"
+    assert p.intent.parameters == {"site": "YouTube", "private": True}
+
+
+def test_private_browser_and_browser_search_intents_parse():
+    opened = parse("Open an incognito Chrome window.")
+    searched = parse("Search Google for AXON voice commands with Firefox.")
+
+    assert opened.intent.type == "open_browser"
+    assert opened.intent.parameters == {
+        "browser": "Chrome", "private": True}
+    assert searched.intent.type == "search_browser"
+    assert searched.intent.parameters == {
+        "query": "AXON voice commands", "browser": "Firefox"}
+
+
 def test_note_preserves_casing():
     p = parse("note that I need to call Mom")
     assert p.intent.type == "add_note"
@@ -81,6 +100,8 @@ def test_new_intents_have_command_categories():
     assert command_type_for("minimize_window") == "WINDOW_CONTROL"
     assert command_type_for("read_clipboard") == "CLIPBOARD"
     assert command_type_for("open_website") == "WEB_NAVIGATION"
+    assert command_type_for("search_browser") == "WEB_NAVIGATION"
+    assert command_type_for("open_browser") == "WEB_NAVIGATION"
 
 
 def test_command_type_mapping_covers_six_categories():

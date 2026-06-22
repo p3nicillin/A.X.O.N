@@ -8,7 +8,7 @@ it is a first-install or machine-policy concern.
 |---|---|---|
 | `TimeDateSkill` | Manifest: `get_time`, `get_date`; enabled by discovery; not sensitive | Skills panel shows intents/parameters/enabled state; real toggle updates registry state |
 | `AppLauncherSkill` | Manifest: `open_app(app)`, `close_app(app)`; named Windows apps; close is destructive and confirmation-gated | Skills panel shows intents/parameters; toggle updates registry state |
-| `BrowserSkill` | Manifest: `open_website(site, browser)`; known-site aliases or validated HTTP(S) URLs; requested browser executable must be installed | Prevents website phrases from becoming executable names and keeps failures inside AXON |
+| `BrowserSkill` | `open_website`, `search_browser`, and `open_browser`; known sites or validated URLs; Chrome incognito, Edge InPrivate, and Firefox private windows | Prevents browser phrases from becoming executable names and keeps failures inside AXON |
 | `SystemInfoSkill` | Manifest: `system_info`; metrics read via `psutil` fallback | Skills panel plus live telemetry gauges |
 | `WebSearchSkill` | Manifest: `web_search(query)`; opens DuckDuckGo/browser fallback; not sensitive | Skills panel shows intent/parameter; toggle updates registry state |
 | `WeatherSkill` | Manifest: `get_weather(location, days)`; cached Open-Meteo JSON; configurable default location; never opens a browser | Spoken and conversation responses remain in AXON; structured current/forecast data flows through `SkillResult` |

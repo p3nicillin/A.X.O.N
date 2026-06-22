@@ -82,6 +82,26 @@ class LocalIntentEngine:
                  "response_text": response},
                 source_text=text)
 
+        def browser_parameters(options: str) -> dict | None:
+            """Parse a constrained browser-option suffix without swallowing prose."""
+            value = options.strip(" .!?-")
+            params: dict = {}
+            browser_match = re.search(
+                r"\b(google chrome|chrome|microsoft edge|edge|firefox)\b",
+                value, re.IGNORECASE)
+            if browser_match:
+                params["browser"] = browser_match.group(1).strip()
+            if re.search(r"\b(?:incognito|private)\b", value, re.IGNORECASE):
+                params["private"] = True
+            residue = re.sub(
+                r"\b(?:google chrome|chrome|microsoft edge|edge|firefox|"
+                r"incognito|private|on|in|with|using|a|an|the|new|browser|"
+                r"window|mode)\b",
+                " ", value, flags=re.IGNORECASE)
+            if residue.strip(" .!?-"):
+                return None
+            return params
+
         # --- time / date ---
         if re.search(r"\b(date|day|today'?s date|what day)\b", t):
             return packet("date query", "get_date", {}, "")
@@ -258,19 +278,47 @@ class LocalIntentEngine:
             return packet("open workspace folder", "open_folder",
                           {"path": (m.group(1) or "").strip()}, "")
 
+        # --- browser search / private browser windows ----------------------
+        m = re.search(
+            r"^\s*(?:open|launch|start)\s+(.+?)\s*[.!]?$",
+            text, re.IGNORECASE)
+        if m and re.search(
+                r"\b(?:browser|chrome|edge|firefox|incognito|private)\b",
+                m.group(1), re.IGNORECASE):
+            params = browser_parameters(m.group(1))
+            if params is not None:
+                return packet("open browser", "open_browser", params, "")
+
+        m = re.search(
+            r"^\s*(?:search(?:\s+google)?|google)(?:\s+for)?\s+(.+?)\s*[.!]?$",
+            text, re.IGNORECASE)
+        if m:
+            search_value = m.group(1).strip()
+            option_match = re.search(
+                r"\s+(?:in|on|with|using)\s+(.+?)\s*$",
+                search_value, re.IGNORECASE)
+            if option_match:
+                params = browser_parameters(option_match.group(1))
+                if params and ("browser" in params or params.get("private")):
+                    query = search_value[:option_match.start()].strip()
+                    if query:
+                        params["query"] = query
+                        return packet("search in browser", "search_browser",
+                                      params, "")
+
         # --- validated website navigation ---------------------------------
         m = re.search(
             r"\b(?:open|go to|visit)\s+"
             r"(youtube|google|gmail|github|reddit|wikipedia|netflix|spotify|"
-            r"amazon|(?:https?://)?[a-z0-9.-]+\.[a-z]{2,}(?:/\S*)?)"
-            r"(?:\s+(?:on|in|with)\s+"
-            r"(google chrome|chrome|microsoft edge|edge|firefox))?[.!]?$",
+            r"amazon|(?:https?://)?[a-z0-9.-]+\.[a-z]{2,}(?:/[^\s]*)?)"
+            r"(.*)$",
             text, re.IGNORECASE)
         if m:
             params = {"site": m.group(1).strip()}
-            if m.group(2):
-                params["browser"] = m.group(2).strip()
-            return packet("open website", "open_website", params, "")
+            options = browser_parameters(m.group(2))
+            if options is not None:
+                params.update(options)
+                return packet("open website", "open_website", params, "")
 
         # --- app launcher ---
         m = re.search(r"\b(open|launch|start|run)\s+(.+)", t)

@@ -24,6 +24,8 @@ from .schema import Plan, Verdict
 _REQUIRED_PARAMS: dict[str, list[str]] = {
     "open_app": ["app"],
     "close_app": ["app"],
+    "open_website": ["site"],
+    "search_browser": ["query"],
     "web_search": ["query"],
     "add_note": ["text"],
     "find_file": ["query"],

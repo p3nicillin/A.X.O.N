@@ -34,6 +34,7 @@ FAST_PATH_INTENTS = frozenset({
     "get_weather",
     "calculate",
     "open_website",
+    "search_browser", "open_browser",
 })
 
 
