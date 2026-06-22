@@ -235,6 +235,7 @@ version, declared intents, skill/intent sensitivity) and a `handler.py` exposing
 | Browser | `open_website`, `search_browser`, `open_browser`, `browser_action` | validated navigation plus verified-foreground tab/history/download controls |
 | BrowserAutomation | `browser_navigate`, `browser_read_page`, `browser_click`, `browser_fill`, `browser_close_managed` | isolated Playwright browser; grounded element IDs, confirmation-gated mutations, state verification, and private-network blocking |
 | WorkflowControl | `list_workflows`, `resume_workflow`, `cancel_workflow` | atomic per-step checkpoints with privacy-redacted recovery data |
+| NativeAutomation | `desktop_inspect`, `desktop_click`, `desktop_fill` | active-window Win32 control grounding with guarded, timeout-protected and verified actions |
 | SystemInfo | `system_info` | also feeds the HUD gauges |
 | System awareness | `list_running_apps`, `network_status` | running process names and local interface/IP status remain inside AXON |
 | WebSearch | `web_search`, `research_web`, `read_webpage` | sourced results and bounded public-page text stay inside AXON; no browser fallback |
@@ -325,10 +326,23 @@ workflow”, or “cancel workflow <id>” to manage recovery. Free-form form va
 and other private text parameters are redacted; workflows containing redacted
 inputs deliberately cannot auto-resume.
 
+### v1.6 native application control
+
+AXON can now inspect HWND-backed controls in the foreground Windows
+application, assigning bounded IDs (`n1`, `n2`, …), roles, labels and screen
+bounds. “Click desktop control n3” and “fill native control n2 with …” are
+confirmation-gated and must produce an observable verified result. Every
+Windows message uses an abort-if-hung timeout, the active application must
+still match the inspected snapshot, and the worker is closed during shutdown.
+
+The release workflow also avoids illegal direct secret references in step
+conditions, preventing the pre-job GitHub Actions failures that generated
+failure emails after otherwise successful pushes.
+
 ## 8. Future roadmap
 
-* **Cross-application visual grounding** — extend the shipped verified DOM
-  grounding to native Windows controls through UI Automation.
+* **Modern Windows accessibility grounding** — broaden the shipped HWND-backed
+  native controls to owner-drawn WinUI/WPF accessibility trees.
 * **True wake-word spotter** — swap the post-STT gate for openWakeWord/Porcupine.
 * **GPU visual core** — PySide6 + moderngl shader renderer behind the existing
   `CoreRenderer` interface; "visual evolution" that changes with usage.

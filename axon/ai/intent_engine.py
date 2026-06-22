@@ -292,6 +292,25 @@ class LocalIntentEngine:
             params = {"filename": m.group(1).strip()} if m.group(1) else {}
             return packet("capture screenshot", "capture_screenshot", params, "")
 
+        # --- grounded native Windows application controls -----------------
+        if re.search(r"\b(?:inspect|scan|list|show|read) (?:the )?"
+                     r"(?:active |current )?(?:app|application|desktop|window) controls\b", t):
+            return packet("inspect native controls", "desktop_inspect", {}, "")
+        m = re.search(r"\bclick (?:desktop |native )?(?:control |element )?"
+                      r"(n[1-9][0-9]{0,3})(?: (?:and )?(?:expect|verify|until) (.+?))?[.!]?$",
+                      text, re.IGNORECASE)
+        if m:
+            params = {"element_id": m.group(1).lower()}
+            if m.group(2):
+                params["expected"] = m.group(2).strip(" .!?")
+            return packet("click native control", "desktop_click", params, "")
+        m = re.search(r"\bfill (?:desktop |native )?(?:control |element )?"
+                      r"(n[1-9][0-9]{0,3}) with (.+?)[.!]?$",
+                      text, re.IGNORECASE)
+        if m:
+            return packet("fill native control", "desktop_fill", {
+                "element_id": m.group(1).lower(), "text": m.group(2).strip()}, "")
+
         # --- keyboard input (always confirmation-gated by its manifest) ---
         m = re.search(r"\btype\s+(.+)", text, re.IGNORECASE)
         if m and m.group(1).strip():

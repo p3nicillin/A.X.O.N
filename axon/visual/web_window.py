@@ -553,6 +553,8 @@ class Bridge:
                 settings.update(skill.vision_status())
             elif m.name == "BrowserAutomationSkill" and hasattr(skill, "status"):
                 settings.update(skill.status())
+            elif m.name == "NativeAutomationSkill" and hasattr(skill, "status"):
+                settings.update(skill.status())
             skills.append({
                 "name": m.name,
                 "version": m.version,

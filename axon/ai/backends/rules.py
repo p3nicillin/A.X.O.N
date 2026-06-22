@@ -40,6 +40,7 @@ FAST_PATH_INTENTS = frozenset({
     "browser_navigate", "browser_read_page", "browser_click", "browser_fill",
     "browser_close_managed",
     "list_workflows", "resume_workflow", "cancel_workflow",
+    "desktop_inspect", "desktop_click", "desktop_fill",
     "read_webpage",
     "set_timer", "set_reminder", "list_reminders", "cancel_reminder",
 })

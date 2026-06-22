@@ -1,0 +1,14 @@
+{
+  "name": "NativeAutomationSkill",
+  "version": "1.0.0",
+  "description": "Inspects active Win32 applications and performs confirmation-gated, timeout-protected, verified actions on grounded native controls.",
+  "intents": ["desktop_inspect", "desktop_click", "desktop_fill"],
+  "intent_params": {
+    "desktop_inspect": [],
+    "desktop_click": ["element_id", "expected"],
+    "desktop_fill": ["element_id", "text"]
+  },
+  "sensitive_intents": ["desktop_click", "desktop_fill"],
+  "sensitive": false,
+  "author": "core"
+}

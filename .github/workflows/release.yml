@@ -8,6 +8,8 @@ on:
 jobs:
   windows:
     runs-on: windows-latest
+    env:
+      AXON_SIGN_CERT_BASE64: ${{ secrets.AXON_SIGN_CERT_BASE64 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -19,13 +21,11 @@ jobs:
       - run: python scripts/benchmark_commands.py --minimum 0.98
       - run: python -m PyInstaller --noconfirm --clean AXON.spec
       - name: Import signing certificate
-        if: ${{ secrets.AXON_SIGN_CERT_BASE64 != '' }}
+        if: env.AXON_SIGN_CERT_BASE64 != ''
         shell: pwsh
-        env:
-          CERTIFICATE: ${{ secrets.AXON_SIGN_CERT_BASE64 }}
-        run: '[IO.File]::WriteAllBytes("axon-signing.pfx", [Convert]::FromBase64String($env:CERTIFICATE))'
+        run: '[IO.File]::WriteAllBytes("axon-signing.pfx", [Convert]::FromBase64String($env:AXON_SIGN_CERT_BASE64))'
       - name: Sign executable
-        if: ${{ secrets.AXON_SIGN_CERT_BASE64 != '' }}
+        if: env.AXON_SIGN_CERT_BASE64 != ''
         shell: pwsh
         env:
           AXON_SIGN_CERT_PASSWORD: ${{ secrets.AXON_SIGN_CERT_PASSWORD }}

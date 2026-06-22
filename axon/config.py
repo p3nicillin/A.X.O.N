@@ -176,6 +176,9 @@ class Config:
     browser_automation_headless: bool = False
     browser_automation_timeout: float = 20.0
 
+    # --- Active-window Microsoft UI Automation (native desktop apps) ---
+    native_automation_timeout: float = 15.0
+
     # --- Autonomy (§16, opt-in: observes the system, suggestion-only) ---
     autonomy_enabled: bool = False    # background context awareness + suggestions
     autonomy_interval: float = 5.0    # seconds between context ticks
